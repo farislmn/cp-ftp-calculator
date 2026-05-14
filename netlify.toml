@@ -2,8 +2,15 @@
   command = "npm run build"
   publish = "dist"
 
-# SPA fallback — serve index.html for all routes
+# Proxy /api/* to intervals.icu — mirrors the Vite dev server proxy
 [[redirects]]
-  from = "/*"
-  to   = "/index.html"
+  from   = "/api/*"
+  to     = "https://intervals.icu/api/:splat"
+  status = 200
+  force  = true
+
+# SPA fallback — serve index.html for all other routes
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
   status = 200
