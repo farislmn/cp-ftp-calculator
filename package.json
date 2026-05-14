@@ -1,0 +1,31 @@
+{
+  "name": "cp-ftp-calculator",
+  "version": "0.1.0",
+  "description": "Performance Prescription Engine — Critical Power & W' for runners",
+  "type": "module",
+  "scripts": {
+    "dev":           "vite",
+    "build":         "vite build",
+    "preview":       "vite preview",
+    "test":          "tsx src/test.ts",
+    "test:strategy": "tsx src/strategyTest.ts",
+    "test:api":      "tsx src/testApi.ts",
+    "auto-cp":       "tsx src/autoCp.ts",
+    "test:orchestrator": "tsx src/testOrchestrator.ts",
+    "test:pacing":       "tsx src/testPacing.ts",
+    "typecheck":     "tsc --noEmit -p tsconfig.app.json"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  }
+}
