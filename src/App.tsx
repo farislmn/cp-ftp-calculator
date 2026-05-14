@@ -124,8 +124,8 @@ export default function App() {
 
       <main className="app-main">
 
-        {/* ── The Lab ──────────────────────────────────────────────────────── */}
-        {activeTab === 'lab' && (
+        {/* ── The Lab — always mounted so state survives tab switches ─────── */}
+        <div style={{ display: activeTab === 'lab' ? 'block' : 'none' }}>
           <LabWorkbench
             onLabUpdate={setLabCtx}
             user={user}
@@ -133,7 +133,7 @@ export default function App() {
             initialApiKey={savedApiKey}
             onSaveToJournal={handleSaveToJournal}
           />
-        )}
+        </div>
 
         {/* ── Strategy Room ─────────────────────────────────────────────────── */}
         {activeTab === 'strategy' && (
