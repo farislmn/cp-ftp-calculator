@@ -727,3 +727,316 @@ input:focus, select:focus {
   .scenario-grid      { grid-template-columns: 1fr; }
   .strategy-detail-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── App header rework ───────────────────────────────────────────────────── */
+.app-header-top {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+/* ─── Auth bar ────────────────────────────────────────────────────────────── */
+.auth-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+.auth-prompt { color: var(--text-muted); }
+.auth-user   { color: var(--text); font-weight: 500; }
+.auth-bar-actions { display: flex; gap: 8px; }
+
+/* ─── Auth panel ──────────────────────────────────────────────────────────── */
+.auth-panel { margin-bottom: 12px; }
+.auth-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.auth-panel-header h3 { font-size: 1rem; font-weight: 700; }
+
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s;
+}
+.btn-google:hover { background: var(--surface-alt); }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-form { display: flex; flex-direction: column; gap: 12px; }
+
+.auth-switch {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+.auth-legal {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+.auth-legal a { color: var(--accent); }
+
+/* ─── Tab navigation ──────────────────────────────────────────────────────── */
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px;
+}
+.tab-btn {
+  padding: 8px 18px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  transition: color 0.15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ─── Tab gate (locked state) ─────────────────────────────────────────────── */
+.tab-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ─── Save to Journal ─────────────────────────────────────────────────────── */
+.save-journal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ─── Button variants ─────────────────────────────────────────────────────── */
+.btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.btn-ghost {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-ghost:hover { background: var(--surface-alt); }
+.btn-ghost:disabled { opacity: 0.4; cursor: default; }
+
+.btn-danger-ghost {
+  color: var(--danger);
+  border-color: transparent;
+}
+.btn-danger-ghost:hover { background: #fee2e2; border-color: #fca5a5; }
+
+.btn-danger {
+  padding: 8px 18px;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-danger:disabled { opacity: 0.5; cursor: default; }
+
+/* ─── Progress Journal ────────────────────────────────────────────────────── */
+.journal-wrap { display: flex; flex-direction: column; gap: 20px; }
+
+.journal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.journal-title    { font-size: 1.1rem; font-weight: 800; }
+.journal-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; }
+
+.journal-window-toggle { display: flex; gap: 4px; }
+.toggle-btn {
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 100px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.toggle-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.journal-chart-card { overflow: hidden; }
+
+.journal-period {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.journal-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.journal-window-empty {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.journal-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.journal-page-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.journal-empty {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text-muted);
+}
+.journal-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.journal-empty-icon { font-size: 2.5rem; }
+
+.journal-list-card h3 { margin-bottom: 16px; }
+
+.journal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.journal-table th {
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.journal-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.journal-table tr:last-child td { border-bottom: none; }
+.journal-table .r2-low { color: var(--danger); }
+
+/* ─── Delete modal ────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-box {
+  background: var(--surface);
+  border-radius: var(--r);
+  padding: 28px;
+  max-width: 340px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+}
+.modal-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+.modal-box p  { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 20px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ─── Message helpers ─────────────────────────────────────────────────────── */
+.msg-success {
+  color: var(--success);
+  font-size: 0.85rem;
+  margin-top: 10px;
+}

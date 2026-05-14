@@ -4,6 +4,7 @@ import type { Sex, PowerMeter, CPResult } from '../labEngine.js';
 import { fetchMaxEfforts } from '../intervalsClient.js';
 import type { MaxEffort } from '../intervalsClient.js';
 import { autoSelectGoldilocksEfforts, effortKey } from '../effortSelector.js';
+import type { User } from '../supabaseClient.js';
 
 export interface LabContext {
   cpWatts: number;
@@ -45,14 +46,25 @@ function fmtDate(dateStr: string): string {
 
 interface LabWorkbenchProps {
   onLabUpdate?: (ctx: LabContext | null) => void;
+  user?: User | null;
+  initialAthleteId?: string;
+  initialApiKey?: string;
+  onSaveToJournal?: (result: CPResult, efforts: MaxEffort[]) => Promise<void>;
 }
 
-export function LabWorkbench({ onLabUpdate }: LabWorkbenchProps = {}) {
+export function LabWorkbench({
+  onLabUpdate,
+  user,
+  initialAthleteId,
+  initialApiKey,
+  onSaveToJournal,
+}: LabWorkbenchProps = {}) {
 
   // ── Config state ────────────────────────────────────────────────────────────
-  const [athleteId,  setAthleteId]  = useState('');
-  const [apiKey,     setApiKey]     = useState('');
+  const [athleteId,  setAthleteId]  = useState(initialAthleteId ?? '');
+  const [apiKey,     setApiKey]     = useState(initialApiKey ?? '');
   const [weightKg,   setWeightKg]   = useState(70);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [sex,        setSex]        = useState<Sex>('Male');
   const [powerMeter, setPowerMeter] = useState<PowerMeter>('Stryd non-Wind');
 
@@ -117,6 +129,13 @@ export function LabWorkbench({ onLabUpdate }: LabWorkbenchProps = {}) {
       return { cpResult: null, cpError: (e as Error).message };
     }
   }, [hasData, selectedEfforts, weightKg, sex, powerMeter]);
+
+  // Pre-fill credentials when profile loads after mount
+  useEffect(() => { if (initialAthleteId) setAthleteId(initialAthleteId); }, [initialAthleteId]);
+  useEffect(() => { if (initialApiKey)    setApiKey(initialApiKey); },    [initialApiKey]);
+
+  // Reset save status when result changes
+  useEffect(() => { setSaveStatus('idle'); }, [cpResult]);
 
   // Notify parent whenever the Lab produces a valid result (or clears)
   useEffect(() => {
@@ -257,6 +276,32 @@ export function LabWorkbench({ onLabUpdate }: LabWorkbenchProps = {}) {
                   <p className="prescription-footnote">
                     Calculated using your best 3-min and 12-min efforts from the last 90 days.
                   </p>
+                )}
+
+                {user && onSaveToJournal && (
+                  <div className="save-journal-row">
+                    <button
+                      className="btn-primary btn-sm"
+                      disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+                      onClick={async () => {
+                        if (!cpResult) return;
+                        setSaveStatus('saving');
+                        try {
+                          await onSaveToJournal(cpResult, selectedEfforts);
+                          setSaveStatus('saved');
+                        } catch {
+                          setSaveStatus('error');
+                        }
+                      }}
+                    >
+                      {saveStatus === 'saving' ? 'Saving…'
+                        : saveStatus === 'saved'  ? '✓ Saved to Journal'
+                        : 'Save to Journal'}
+                    </button>
+                    {saveStatus === 'error' && (
+                      <span className="msg-error" style={{ fontSize: '0.8rem' }}>Save failed.</span>
+                    )}
+                  </div>
                 )}
               </>
             ) : (

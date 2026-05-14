@@ -99,6 +99,8 @@ ATHLETE_ID=iXXXXXX API_KEY=your-key WEIGHT_KG=53 CP_WATTS=190 \
 
 ```
 index.html                      # Vite HTML entry point
+public/
+  mockup.html                   # Static UI mockup — not part of the app build
 vite.config.ts                  # Vite config — proxies /api → intervals.icu (no path rewrite; avoids CORS in browser)
 src/
   main.tsx                      # React entry point
@@ -194,8 +196,8 @@ Fetches the activity detail for the CP test efforts and returns `EnvironmentCont
 **`extractTrainingTerrainCVI(athleteId, headers)`** *(internal)*
 Returns average CVI from the 3 longest non-race runs in the last **6 weeks** (42 days). Uses `total_elevation_gain` as both climb and descent (symmetric assumption). Returns 0 with a warning when no qualifying runs exist.
 
-**`extractPriorRaceAnchor(athleteId, apiKey, targetRaceDistanceMeters?)`** *(exported, legacy — candidate for deletion)*
-No longer called by `syncStrategyData`. Scans last 180 days for `race === true` runs, returns the race closest to `targetRaceDistanceMeters`. The Riegel panel uses `fetchRecentRaces` instead; this can be removed once confirmed no external callers remain.
+**`extractPriorRaceAnchor(athleteId, apiKey, targetRaceDistanceMeters?)`** *(exported, dead code — safe to delete)*
+No longer called by `syncStrategyData` or any other file. Scans last 180 days for `race === true` runs, returns the race closest to `targetRaceDistanceMeters`. The Riegel panel uses `fetchRecentRaces` instead.
 
 **`extractRunningEffectiveness(athleteId, apiKey, targetDistanceM, cpWatts, weightKg)`**
 Returns `REResult { longRunRE, intervalRE }`. Throws (strict error) if `targetDistanceM` is null.

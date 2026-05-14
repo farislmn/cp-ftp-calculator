@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Performance Prescription Engine — Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0b0d12;
+    --surface:   #13161f;
+    --surface2:  #1c2030;
+    --border:    #252a38;
+    --border2:   #2e3447;
+    --text:      #e8eaf0;
+    --muted:     #6b7494;
+    --accent:    #f97316;
+    --accent-dim:#7c3a11;
+    --green:     #22c55e;
+    --red:       #ef4444;
+    --blue:      #3b82f6;
+    --card-r:    14px;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Shell ── */
+  .shell { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+  }
+  .logo {
+    padding: 0 20px 28px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .logo-mark {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 2px;
+  }
+  .logo-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .nav-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 20px;
+    margin-bottom: 6px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active {
+    color: var(--accent);
+    background: rgba(249,115,22,0.08);
+    border-left-color: var(--accent);
+  }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 20px;
+    background: var(--border2);
+    color: var(--muted);
+  }
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 20px 0;
+    border-top: 1px solid var(--border);
+  }
+  .athlete-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .athlete-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #ea580c);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .athlete-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .athlete-sub  { font-size: 11px; color: var(--muted); }
+
+  /* ── Main content ── */
+  .main {
+    margin-left: 220px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    height: 60px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 28px;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar-title { font-size: 16px; font-weight: 700; }
+  .topbar-sub   { font-size: 12px; color: var(--muted); }
+  .topbar-sep   { width: 1px; height: 20px; background: var(--border); }
+  .status-dot   {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+  .status-text  { font-size: 12px; color: var(--muted); }
+  .topbar-actions { margin-left: auto; display: flex; gap: 8px; }
+  .btn {
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .btn-ghost {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border2); }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: #ea580c; }
+
+  /* ── Screens ── */
+  .screen { display: none; padding: 28px; flex-direction: column; gap: 20px; }
+  .screen.active { display: flex; }
+
+  /* ── Section header ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-r);
+    padding: 20px 22px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 16px;
+  }
+
+  /* ── Lab screen ── */
+  .lab-grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+
+  .input-group { display: flex; flex-direction: column; gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .field input, .field select {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .effort-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .effort-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+  }
+  .effort-row.selected { border-color: var(--accent); background: rgba(249,115,22,0.06); }
+  .effort-check {
+    width: 18px; height: 18px; border-radius: 5px;
+    border: 2px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .effort-row.selected .effort-check { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .effort-dur { font-size: 13px; font-weight: 700; color: var(--text); width: 50px; }
+  .effort-bar-wrap { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .effort-bar { height: 100%; background: var(--accent); border-radius: 99px; opacity: 0.5; }
+  .effort-row.selected .effort-bar { opacity: 1; }
+  .effort-w { font-size: 13px; font-weight: 600; color: var(--text); min-width: 52px; text-align: right; }
+  .effort-date { font-size: 11px; color: var(--muted); min-width: 72px; text-align: right; }
+
+  /* ── Result panel ── */
+  .result-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .result-metric {
+    background: var(--surface2);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .result-metric:first-child { border-radius: 10px 0 0 10px; }
+  .result-metric:last-child  { border-radius: 0 10px 10px 0; }
+  .metric-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .metric-value { font-size: 38px; font-weight: 800; color: var(--text); line-height: 1; }
+  .metric-unit  { font-size: 16px; font-weight: 500; color: var(--muted); }
+  .metric-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .metric-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 3px 8px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(34,197,94,0.12);
+    color: var(--green);
+    align-self: flex-start;
+  }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .stat-value { font-size: 22px; font-weight: 800; color: var(--text); }
+  .stat-unit  { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+  .confidence-bar-wrap {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .confidence-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .confidence-label  { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .confidence-value  { font-size: 12px; font-weight: 700; color: var(--green); }
+  .bar-track { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 99px; }
+
+  /* ── Strategy screen ── */
+  .scenario-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+  .scenario-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--card-r);
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .scenario-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .scenario-card.aggressive::before { background: var(--red); }
+  .scenario-card.expected::before   { background: var(--accent); }
+  .scenario-card.conservative::before { background: var(--green); }
+  .scenario-card.selected, .scenario-card:hover {
+    border-color: var(--border2);
+    background: #1f2538;
+  }
+  .scenario-card.selected.aggressive { border-color: rgba(239,68,68,0.5); }
+  .scenario-card.selected.expected   { border-color: rgba(249,115,22,0.5); }
+  .scenario-card.selected.conservative { border-color: rgba(34,197,94,0.5); }
+
+  .scenario-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 99px;
+    margin-bottom: 12px;
+  }
+  .tag-aggressive { background: rgba(239,68,68,0.12); color: var(--red); }
+  .tag-expected   { background: rgba(249,115,22,0.12); color: var(--accent); }
+  .tag-conservative { background: rgba(34,197,94,0.12); color: var(--green); }
+
+  .scenario-time {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 14px;
+  }
+  .scenario-divider { height: 1px; background: var(--border); margin-bottom: 14px; }
+  .scenario-stats { display: flex; flex-direction: column; gap: 8px; }
+  .scenario-stat-row { display: flex; justify-content: space-between; align-items: center; }
+  .scenario-stat-key { font-size: 12px; color: var(--muted); }
+  .scenario-stat-val { font-size: 13px; font-weight: 700; color: var(--text); }
+  .scenario-stat-val.accent     { color: var(--accent); }
+  .scenario-stat-val.red        { color: var(--red); }
+  .scenario-stat-val.green      { color: var(--green); }
+
+  .selected-badge {
+    position: absolute;
+    top: 12px; right: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 99px;
+    background: var(--accent);
+    color: #fff;
+  }
+
+  /* ── Pacing section ── */
+  .pacing-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .pacing-controls { display: flex; gap: 10px; align-items: center; }
+  .pacing-control { display: flex; align-items: center; gap: 6px; }
+  .pacing-control label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .mini-input {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 7px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    width: 64px;
+    outline: none;
+  }
+  .mini-select {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 7px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+  }
+
+  /* Chart area */
+  .chart-area {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    height: 120px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: flex-end;
+    padding: 16px;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .chart-bar {
+    flex: 1;
+    border-radius: 4px 4px 0 0;
+    background: var(--accent);
+    opacity: 0.25;
+    transition: opacity 0.15s;
+  }
+  .chart-bar:hover { opacity: 0.6; }
+  .chart-bar.hi { opacity: 0.5; }
+  .chart-refline {
+    position: absolute;
+    left: 16px; right: 16px;
+    height: 1px;
+    background: var(--accent);
+    opacity: 0.3;
+    top: 40px;
+  }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 11px 14px; font-size: 13px; color: var(--text); }
+  .td-power { font-weight: 700; color: var(--accent); }
+  .td-mono  { font-family: 'SF Mono', 'Fira Mono', monospace; }
+  tfoot td  { padding: 11px 14px; background: var(--surface2); font-size: 13px; border-top: 1px solid var(--border); }
+
+  /* Push section */
+  .push-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .push-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .date-input {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+  }
+  .btn-push {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-push:hover { background: #ea580c; }
+  .push-success {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--green);
+  }
+
+  /* ── Progress Journal ── */
+  .coming-soon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: 12px;
+  }
+  .coming-icon { font-size: 48px; }
+  .coming-title { font-size: 20px; font-weight: 800; color: var(--text); }
+  .coming-sub   { font-size: 14px; color: var(--muted); text-align: center; max-width: 340px; }
+
+  /* ── Env banner ── */
+  .env-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: 9px;
+    font-size: 13px;
+    color: var(--blue);
+  }
+  .env-icon { font-size: 15px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">SuperPower</div>
+      <div class="logo-name">Performance<br>Prescription Engine</div>
+    </div>
+
+    <div class="nav-section-label" style="margin-bottom:8px">Pillars</div>
+
+    <div class="nav-item active" onclick="showScreen('lab')">
+      <span class="nav-icon">⚗️</span> The Lab
+    </div>
+    <div class="nav-item" onclick="showScreen('strategy')">
+      <span class="nav-icon">🎯</span> Strategy Room
+    </div>
+    <div class="nav-item" onclick="showScreen('journal')">
+      <span class="nav-icon">📈</span> Progress Journal
+      <span class="nav-badge">Soon</span>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="athlete-chip">
+        <div class="athlete-avatar">FS</div>
+        <div>
+          <div class="athlete-name">Faris</div>
+          <div class="athlete-sub">Connected · Intervals.icu</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="topbar-title">The Lab</div>
+        <div class="topbar-sub" id="topbar-sub">CP / W′ from maximal efforts</div>
+      </div>
+      <div class="topbar-sep"></div>
+      <div class="status-dot"></div>
+      <div class="status-text">Synced 2 min ago</div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost">Re-sync</button>
+        <button class="btn btn-primary">Calculate</button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════ LAB SCREEN ════════════════════════════ -->
+    <div class="screen active" id="screen-lab">
+
+      <div class="lab-grid">
+
+        <!-- Left: config + efforts -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <div class="card">
+            <div class="card-title">Athlete Config</div>
+            <div class="input-group">
+              <div class="field-row">
+                <div class="field">
+                  <label>Weight (kg)</label>
+                  <input type="number" value="69" />
+                </div>
+                <div class="field">
+                  <label>Sex</label>
+                  <select><option>Male</option><option>Female</option></select>
+                </div>
+              </div>
+              <div class="field">
+                <label>Power Meter</label>
+                <select><option>Stryd Wind</option><option>Stryd (non-Wind)</option><option>Others</option></select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-header">
+              <div class="card-title" style="margin:0">Maximal Efforts</div>
+              <span style="font-size:11px;color:var(--muted);">Auto-selected · last 90 days</span>
+            </div>
+            <div style="height:10px"></div>
+            <div class="effort-list">
+              <div class="effort-row selected">
+                <div class="effort-check">✓</div>
+                <div class="effort-dur">3 min</div>
+                <div class="effort-bar-wrap"><div class="effort-bar" style="width:60%"></div></div>
+                <div class="effort-w">312 W</div>
+                <div class="effort-date">Apr 18</div>
+              </div>
+              <div class="effort-row selected">
+                <div class="effort-check">✓</div>
+                <div class="effort-dur">6 min</div>
+                <div class="effort-bar-wrap"><div class="effort-bar" style="width:50%"></div></div>
+                <div class="effort-w">278 W</div>
+                <div class="effort-date">May 2</div>
+              </div>
+              <div class="effort-row">
+                <div class="effort-check"></div>
+                <div class="effort-dur">12 min</div>
+                <div class="effort-bar-wrap"><div class="effort-bar" style="width:40%"></div></div>
+                <div class="effort-w">245 W</div>
+                <div class="effort-date">Mar 30</div>
+              </div>
+              <div class="effort-row">
+                <div class="effort-check"></div>
+                <div class="effort-dur">20 min</div>
+                <div class="effort-bar-wrap"><div class="effort-bar" style="width:32%"></div></div>
+                <div class="effort-w">228 W</div>
+                <div class="effort-date">Apr 5</div>
+              </div>
+              <div class="effort-row">
+                <div class="effort-check"></div>
+                <div class="effort-dur">30 min</div>
+                <div class="effort-bar-wrap"><div class="effort-bar" style="width:26%"></div></div>
+                <div class="effort-w">214 W</div>
+                <div class="effort-date">Apr 22</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: results -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <div class="card">
+            <div class="card-title">Critical Power Model</div>
+
+            <div class="result-hero">
+              <div class="result-metric">
+                <div class="metric-label">Critical Power</div>
+                <div><span class="metric-value">191</span> <span class="metric-unit">W</span></div>
+                <div class="metric-sub">2.77 W/kg</div>
+                <div class="metric-badge">✓ High confidence</div>
+              </div>
+              <div class="result-metric">
+                <div class="metric-label">W′ Anaerobic Reserve</div>
+                <div><span class="metric-value">9.8</span> <span class="metric-unit">kJ</span></div>
+                <div class="metric-sub">Within expected range</div>
+                <div class="metric-badge">✓ Good</div>
+              </div>
+            </div>
+
+            <div class="stat-grid">
+              <div class="stat-card">
+                <div class="stat-label">R² Fit</div>
+                <div class="stat-value">0.999</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">TTE @ CP</div>
+                <div><span class="stat-value">50</span> <span class="stat-unit">min</span></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Model</div>
+                <div class="stat-value" style="font-size:16px">2-point</div>
+              </div>
+            </div>
+
+            <div class="confidence-bar-wrap">
+              <div class="confidence-header">
+                <span class="confidence-label">Regression Confidence (R²)</span>
+                <span class="confidence-value">99.9%</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:99.9%;background:var(--green)"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">W′ Rating</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:13px;color:var(--muted)">Expected range (male, Stryd Wind)</span>
+                <span style="font-size:13px;font-weight:700;color:var(--muted)">8.5 – 11.5 kJ</span>
+              </div>
+              <div style="position:relative;height:12px;background:var(--bg);border-radius:99px;border:1px solid var(--border);overflow:hidden">
+                <div style="position:absolute;left:20%;right:20%;height:100%;background:rgba(34,197,94,0.15);border-radius:99px"></div>
+                <!-- marker at 9.8 kJ — roughly 58% across -->
+                <div style="position:absolute;top:0;left:58%;transform:translateX(-50%);width:10px;height:100%;background:var(--accent);border-radius:99px"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+                <span>6 kJ</span><span>9.8 kJ ← you</span><span>14 kJ</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════ STRATEGY SCREEN ═══════════════════════ -->
+    <div class="screen" id="screen-strategy">
+
+      <!-- Env banner -->
+      <div class="env-banner">
+        <span class="env-icon">🌡️</span>
+        Race conditions are <strong style="margin:0 4px">2.4% harder</strong> than your test environment — adjusted CP: 186 W
+      </div>
+
+      <!-- Scenario cards -->
+      <div>
+        <div class="section-header" style="margin-bottom:12px">
+          <div class="section-title">Race Prescription</div>
+          <span style="font-size:12px;color:var(--muted)">Marathon · 42.2 km · 180 m gain</span>
+        </div>
+
+        <div class="scenario-grid">
+
+          <div class="scenario-card aggressive">
+            <span class="scenario-tag tag-aggressive">⚡ Aggressive</span>
+            <div class="scenario-time">3:54:10</div>
+            <div class="scenario-divider"></div>
+            <div class="scenario-stats">
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">Target Power</span>
+                <span class="scenario-stat-val red">198 W</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">W/kg</span>
+                <span class="scenario-stat-val">2.87</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">% adj CP</span>
+                <span class="scenario-stat-val">106%</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">Riegel</span>
+                <span class="scenario-stat-val">−0.08</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="scenario-card expected selected">
+            <span class="selected-badge">Selected</span>
+            <span class="scenario-tag tag-expected">🎯 Expected</span>
+            <div class="scenario-time">4:05:22</div>
+            <div class="scenario-divider"></div>
+            <div class="scenario-stats">
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">Target Power</span>
+                <span class="scenario-stat-val accent">186 W</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">W/kg</span>
+                <span class="scenario-stat-val">2.70</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">% adj CP</span>
+                <span class="scenario-stat-val">100%</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">Riegel</span>
+                <span class="scenario-stat-val">−0.09</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="scenario-card conservative">
+            <span class="scenario-tag tag-conservative">🛡️ Conservative</span>
+            <div class="scenario-time">4:17:44</div>
+            <div class="scenario-divider"></div>
+            <div class="scenario-stats">
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">Target Power</span>
+                <span class="scenario-stat-val green">175 W</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">W/kg</span>
+                <span class="scenario-stat-val">2.54</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">% adj CP</span>
+                <span class="scenario-stat-val">94%</span>
+              </div>
+              <div class="scenario-stat-row">
+                <span class="scenario-stat-key">Riegel</span>
+                <span class="scenario-stat-val">−0.10</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Pacing Plan -->
+      <div class="card">
+        <div class="pacing-header">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">Pacing Plan</div>
+            <div style="font-size:12px;color:var(--accent);margin-top:2px">EXPECTED — 186 W target</div>
+          </div>
+          <div class="pacing-controls">
+            <div class="pacing-control">
+              <label>Split every (km)</label>
+              <input class="mini-input" type="number" value="5" />
+            </div>
+            <div class="pacing-control">
+              <label>Type</label>
+              <select class="mini-select">
+                <option>Negative Split</option>
+                <option>Even Split</option>
+                <option>Positive Split</option>
+              </select>
+            </div>
+            <div class="pacing-control">
+              <label>Deviation %</label>
+              <input class="mini-input" type="number" value="2" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini chart -->
+        <div class="chart-area">
+          <div class="chart-refline"></div>
+          <div class="chart-bar" style="height:62%"></div>
+          <div class="chart-bar" style="height:64%"></div>
+          <div class="chart-bar" style="height:67%"></div>
+          <div class="chart-bar" style="height:70%"></div>
+          <div class="chart-bar hi" style="height:74%"></div>
+          <div class="chart-bar hi" style="height:77%"></div>
+          <div class="chart-bar hi" style="height:80%"></div>
+          <div class="chart-bar hi" style="height:84%"></div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Split</th>
+                <th>Target Power</th>
+                <th>Zone (%CP)</th>
+                <th>Split Time</th>
+                <th>Pace</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>0 – 5 km</td>
+                <td class="td-power">180 W</td>
+                <td class="td-mono" style="color:var(--muted)">92%–95%</td>
+                <td class="td-mono">28:42</td>
+                <td class="td-mono">5:44/km</td>
+              </tr>
+              <tr>
+                <td>5 – 10 km</td>
+                <td class="td-power">183 W</td>
+                <td class="td-mono" style="color:var(--muted)">94%–97%</td>
+                <td class="td-mono">28:18</td>
+                <td class="td-mono">5:39/km</td>
+              </tr>
+              <tr>
+                <td>10 – 15 km</td>
+                <td class="td-power">185 W</td>
+                <td class="td-mono" style="color:var(--muted)">95%–98%</td>
+                <td class="td-mono">28:02</td>
+                <td class="td-mono">5:36/km</td>
+              </tr>
+              <tr>
+                <td>15 – 20 km</td>
+                <td class="td-power">187 W</td>
+                <td class="td-mono" style="color:var(--muted)">96%–100%</td>
+                <td class="td-mono">27:44</td>
+                <td class="td-mono">5:33/km</td>
+              </tr>
+              <tr>
+                <td>20 – 25 km</td>
+                <td class="td-power">188 W</td>
+                <td class="td-mono" style="color:var(--muted)">97%–101%</td>
+                <td class="td-mono">27:33</td>
+                <td class="td-mono">5:31/km</td>
+              </tr>
+              <tr>
+                <td>25 – 30 km</td>
+                <td class="td-power">190 W</td>
+                <td class="td-mono" style="color:var(--muted)">98%–102%</td>
+                <td class="td-mono">27:18</td>
+                <td class="td-mono">5:27/km</td>
+              </tr>
+              <tr>
+                <td>30 – 35 km</td>
+                <td class="td-power">191 W</td>
+                <td class="td-mono" style="color:var(--muted)">99%–103%</td>
+                <td class="td-mono">27:07</td>
+                <td class="td-mono">5:25/km</td>
+              </tr>
+              <tr>
+                <td>35 – 42.2 km</td>
+                <td class="td-power">193 W</td>
+                <td class="td-mono" style="color:var(--muted)">100%–105%</td>
+                <td class="td-mono">40:48</td>
+                <td class="td-mono">5:21/km (avg)</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td><strong>Total</strong></td>
+                <td><strong>~186 W avg</strong></td>
+                <td></td>
+                <td><strong>4:05:22</strong></td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Push row -->
+        <div class="push-row">
+          <span class="push-label">Race Date</span>
+          <input class="date-input" type="date" value="2026-06-14" />
+          <button class="btn-push">
+            <span>↑</span> Push to Intervals.icu
+          </button>
+          <div class="push-success">✓ Scheduled on Intervals.icu</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═════════════════════════════ JOURNAL SCREEN ══════════════════════════ -->
+    <div class="screen" id="screen-journal">
+      <div class="coming-soon">
+        <div class="coming-icon">📈</div>
+        <div class="coming-title">Progress Journal</div>
+        <div class="coming-sub">Track your CP and W′ over time. See how your fitness evolves across training blocks and race cycles.</div>
+        <button class="btn btn-ghost" style="margin-top:8px">Coming soon</button>
+      </div>
+    </div>
+
+  </div><!-- end .main -->
+</div><!-- end .shell -->
+
+<script>
+const screens = {
+  lab:      { screen: 'screen-lab',      title: 'The Lab',         sub: 'CP / W′ from maximal efforts' },
+  strategy: { screen: 'screen-strategy', title: 'Strategy Room',   sub: 'Race scenarios & pacing plan' },
+  journal:  { screen: 'screen-journal',  title: 'Progress Journal', sub: 'CP / W′ trends over time' },
+};
+
+function showScreen(key) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  document.getElementById(screens[key].screen).classList.add('active');
+  document.querySelectorAll('.nav-item')[Object.keys(screens).indexOf(key)].classList.add('active');
+  document.getElementById('topbar-title').textContent = screens[key].title;
+  document.getElementById('topbar-sub').textContent   = screens[key].sub;
+}
+</script>
+
+</body>
+</html>
