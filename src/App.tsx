@@ -171,6 +171,12 @@ export default function App() {
         )}
 
       </main>
+
+      <footer className="app-footer">
+        <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+        <span>·</span>
+        <a href="/tos.html" target="_blank" rel="noopener">Terms of Service</a>
+      </footer>
     </div>
   );
 }
