@@ -135,9 +135,19 @@ export default function App() {
           />
         </div>
 
-        {/* ── Strategy Room ─────────────────────────────────────────────────── */}
-        {activeTab === 'strategy' && (
-          labCtx ? (
+        {/* ── Strategy Room gate (only when no lab data) ───────────────────── */}
+        {!labCtx && activeTab === 'strategy' && (
+          <div className="card tab-gate">
+            <p>Run a Lab session first to unlock the Strategy Room.</p>
+            <button className="btn-primary btn-sm" onClick={() => setActiveTab('lab')}>
+              Go to The Lab
+            </button>
+          </div>
+        )}
+
+        {/* ── Strategy Room — always mounted once labCtx exists ─────────────── */}
+        {labCtx && (
+          <div style={{ display: activeTab === 'strategy' ? 'block' : 'none' }}>
             <StrategyRoom
               cpWatts={labCtx.cpWatts}
               wPrimeJoules={labCtx.wPrimeJoules}
@@ -146,14 +156,7 @@ export default function App() {
               apiKey={labCtx.apiKey}
               selectedEfforts={labCtx.selectedEfforts}
             />
-          ) : (
-            <div className="card tab-gate">
-              <p>Run a Lab session first to unlock the Strategy Room.</p>
-              <button className="btn-primary btn-sm" onClick={() => setActiveTab('lab')}>
-                Go to The Lab
-              </button>
-            </div>
-          )
+          </div>
         )}
 
         {/* ── Progress Journal ──────────────────────────────────────────────── */}
