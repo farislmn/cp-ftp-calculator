@@ -18,16 +18,16 @@ Transitioning the SuperPower Calculator (spreadsheet) into a **"Performance Pres
 
 1. **The Lab** — CP/W′ engine + `LabWorkbench` UI. **Live.**
 2. **The Strategy Room** — Riegel/RE race scenario engine + `StrategyRoom` UI + `PacingSplitPlan` sub-component. **Live — math verified, pacing module active, Riegel calibration panel live, push to Intervals.icu live.**
-3. **The Progress Journal** — Historical CP/W′ tracking. **Not yet built.**
+3. **The Progress Journal** — Historical CP/W′ tracking. **Live — Supabase-backed, SVG line chart, 3/6-month window, Save to Journal from Lab.**
 4. **The Data Orchestrator** — Automatic context extraction from Intervals.icu (environment, training terrain CVI, RE). **Live — feeds Pillars 1 & 2.**
 
 ---
 
 ## Next Immediate Goals
 
-### 1 — Progress Journal (Pillar 3)
+### 1 — Intervals.icu OAuth (deferred)
 
-Not yet built. Intended to track CP/W′ over time. Design TBD.
+Intervals.icu OAuth app registration requires a live Privacy Policy URL (`https://aturpace.netlify.app/privacy.html` — now live). Registration not yet done. Once registered, the Intervals.icu OAuth flow replaces manual API key + athlete ID entry for users who connect via Intervals.icu.
 
 ### 2 — Strategy Room refinements (open)
 
@@ -46,12 +46,14 @@ Not yet built. Intended to track CP/W′ over time. Design TBD.
 | `intervalsClient.ts` — MMP extraction from streams | ✅ live-tested (13 MMP efforts, values match spreadsheet) |
 | `effortSelector.ts` — Goldilocks effort picker | ✅ complete |
 | `dataOrchestrator.ts` — Pillar 4 context sync | ✅ live-tested. Extracts environment, training terrain CVI (3 longest runs last 6 weeks), and RE. `fetchRecentRaces()` fetches the 6-month race list on demand for the Riegel panel. |
-| `components/LabWorkbench.tsx` — Pillar 1 UI | ✅ live — exports `LabContext`; fires `onLabUpdate` callback to `App.tsx` |
+| `supabaseClient.ts` — Supabase singleton | ✅ live — reads `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` env vars |
+| `components/AuthSection.tsx` — auth UI | ✅ live — Google OAuth + email/password sign-up/sign-in via Supabase; collapsed bar when signed out, user email + sign-out when signed in |
+| `components/LabWorkbench.tsx` — Pillar 1 UI | ✅ live — exports `LabContext`; fires `onLabUpdate` callback to `App.tsx`; accepts `user`, `initialAthleteId`, `initialApiKey`, `onSaveToJournal` props; shows "Save to Journal" button when signed in and CP result is available |
 | `components/StrategyRoom.tsx` — Pillar 2 UI | ✅ live — clickable scenario cards, pacing module, RE averaging. Riegel calibration panel: fetches race list on open, shows recommended race with recency + distance scoring, user picks anchor → Riegel table → selects exponent. Separate elevation gain/loss inputs for net-downhill CVI. Training terrain CVI auto-derived from orchestrator. |
 | `intervalsWorkout.ts` — push pacing plan to Intervals.icu | ✅ live — POSTs to `/api/v1/athlete/{id}/events`; description in native Intervals.icu text format using %CP zones |
 | `components/PacingSplitPlan.tsx` — Pacing sub-component | ✅ live — Negative/Positive/Even split, free km number input (0 = whole distance), SVG chart, split table, push to Intervals.icu with race date picker. `npm run test:pacing` passes (Δ = 0.000 s) |
+| `components/ProgressJournal.tsx` — Pillar 3 UI | ✅ live — SVG line chart of CP over time, W′ annotation at each node, 3/6-month window toggle, prev/next page navigation for data older than 6 months, full entry list with delete confirmation |
 | `components/StrategyDashboard.tsx` | ⚠️ **Dead code** — `App.tsx` mounts `StrategyRoom`; this file is never rendered. Safe to delete unless a redesign resurrects it. |
-| Progress Journal — Pillar 3 | ❌ not yet built |
 
 **Do not modify `labEngine.ts` regression logic without a full parity re-check against the `v4 Calcs` spreadsheet.**
 
@@ -59,7 +61,16 @@ Not yet built. Intended to track CP/W′ over time. Design TBD.
 
 ## Tech Stack
 
-React 19 · Vite 8 · TypeScript 5.8 · `tsx` for CLI scripts · no test framework (custom parity scripts only).
+React 19 · Vite 8 · TypeScript 5.8 · Supabase (auth + database) · Netlify (hosting) · `tsx` for CLI scripts · no test framework (custom parity scripts only).
+
+## Deployment
+
+- **Hosting:** Netlify at `https://aturpace.netlify.app`
+- **Repo:** `https://github.com/farislmn/cp-ftp-calculator` — push to `main` triggers auto-deploy
+- **Build config:** `netlify.toml` — build command `npm run build`, publish `dist`, SPA fallback `/*` → `/index.html`
+- **API proxy:** `netlify.toml` proxies `/api/*` → `https://intervals.icu/api/:splat` (mirrors the Vite dev server proxy; avoids CORS in the browser)
+- **Env vars (Netlify + local `.env`):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- **Supabase Auth redirect URL:** `https://aturpace.netlify.app/**` must be in Supabase → Authentication → URL Configuration → Redirect URLs
 
 ## Commands
 
@@ -85,7 +96,7 @@ ATHLETE_ID=iXXXXXX API_KEY=your-key WEIGHT_KG=53 CP_WATTS=190 \
 
 **Two TypeScript configs:**
 - `tsconfig.json` — NodeNext module resolution, used by `tsx` for all CLI scripts.
-- `tsconfig.app.json` — bundler + JSX, used by Vite. `npm run typecheck` targets this one.
+- `tsconfig.app.json` — bundler + JSX, used by Vite. `npm run typecheck` targets this one. Explicitly sets `types: ["vite/client", "node"]` to satisfy both `import.meta.env` and Supabase's Node type dependencies.
 
 **Import extension rule:** All intra-project imports must use `.js` extensions even though the source files are `.ts` (e.g. `import { calculateCP } from '../labEngine.js'`). This is required by NodeNext module resolution and applies everywhere — Vite, `tsx`, and Node all expect it.
 
@@ -93,19 +104,55 @@ ATHLETE_ID=iXXXXXX API_KEY=your-key WEIGHT_KG=53 CP_WATTS=190 \
 
 ## State Architecture
 
-`App.tsx` is a thin shell. `LabWorkbench` calls `onLabUpdate` with a `LabContext` object (cpWatts, wPrimeJoules, weightKg, athleteId, apiKey, selectedEfforts). `App.tsx` stores this in state and passes it as props to `StrategyRoom`. `StrategyRoom` calls `syncStrategyData` internally and manages all orchestrator state itself.
+`App.tsx` manages auth state (Supabase `onAuthStateChange`), tab navigation, and the `LabContext` bridge between pillars.
+
+- **Auth:** `user` (Supabase `User | null`) is read from `supabase.auth.getSession()` on load, then kept live via `onAuthStateChange`. On sign-in, the user's `user_profiles` row is fetched to pre-fill `savedAthleteId` / `savedApiKey`.
+- **Tab nav:** Three tabs — The Lab, Strategy Room, Progress Journal. `LabWorkbench` and `StrategyRoom` (once `labCtx` exists) are **always mounted** and toggled via `display: none` so their internal state survives tab switches. Progress Journal is conditionally mounted (requires auth).
+- **Lab → Strategy bridge:** `LabWorkbench` calls `onLabUpdate` with a `LabContext` object (cpWatts, wPrimeJoules, weightKg, athleteId, apiKey, selectedEfforts). `App.tsx` stores this and passes it as props to `StrategyRoom`. `StrategyRoom` calls `syncStrategyData` internally and manages all orchestrator state itself.
+- **Save to Journal:** `App.tsx` owns `handleSaveToJournal` — upserts `user_profiles` (credentials) and inserts to `journal_entries`. Called by `LabWorkbench` via `onSaveToJournal` prop.
+
+## Supabase Schema
+
+Two tables, both with RLS enabled (users can only access their own rows):
+
+```sql
+-- Stores Intervals.icu credentials so they persist across sessions
+create table public.user_profiles (
+  id         uuid references auth.users(id) on delete cascade primary key,
+  athlete_id text,
+  api_key    text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- One row per "Save to Journal" click in the Lab
+create table public.journal_entries (
+  id              uuid default gen_random_uuid() primary key,
+  user_id         uuid references auth.users(id) on delete cascade not null,
+  recorded_at     date not null default current_date,
+  cp_watts        numeric(6,2) not null,
+  w_prime_joules  numeric(10,2) not null,
+  r_squared       numeric(6,4),
+  efforts         jsonb,   -- [{durationSeconds, averagePower, date}]
+  created_at      timestamptz default now()
+);
+```
 
 ## Code Structure
 
 ```
 index.html                      # Vite HTML entry point
+netlify.toml                    # Netlify build config + API proxy + SPA fallback
 public/
   mockup.html                   # Static UI mockup — not part of the app build
-vite.config.ts                  # Vite config — proxies /api → intervals.icu (no path rewrite; avoids CORS in browser)
+  privacy.html                  # Hosted privacy policy (https://aturpace.netlify.app/privacy.html)
+  tos.html                      # Hosted terms of service (https://aturpace.netlify.app/tos.html)
+vite.config.ts                  # Vite config — proxies /api → intervals.icu (dev only; netlify.toml handles prod)
 src/
   main.tsx                      # React entry point
-  App.tsx                       # Root component — mounts LabWorkbench + StrategyRoom
+  App.tsx                       # Root — auth state, tab nav, Lab/Strategy/Journal orchestration
   index.css                     # Global stylesheet (CSS custom properties, responsive)
+  supabaseClient.ts             # Supabase client singleton (reads VITE_ env vars)
   labEngine.ts                  # CP / W′ regression — LOCKED, parity-verified
   envAdjustment.ts              # Standalone environmental adjustment factor
   strategyEngine.ts             # Pillar 2 engine — CVI, Riegel, RE, race scenarios
@@ -120,15 +167,42 @@ src/
   testOrchestrator.ts           # Orchestrator sync test
   testPacing.ts                 # Pacing split plan verifier (npm run test:pacing)
   components/
-    LabWorkbench.tsx             # Pillar 1 UI — config form + prescription card + workbench
+    AuthSection.tsx              # Auth bar — Google OAuth + email sign-in/sign-up; collapsed when signed out
+    LabWorkbench.tsx             # Pillar 1 UI — config form + prescription card + workbench + Save to Journal
     StrategyRoom.tsx             # Pillar 2 UI — race setup, scenario cards, pacing module
     PacingSplitPlan.tsx          # Pacing sub-component — split table + SVG power chart + push to Intervals.icu
+    ProgressJournal.tsx          # Pillar 3 UI — SVG CP-over-time chart + entry list + delete
     StrategyDashboard.tsx        # ⚠️ Alternate Pillar 2 UI — not mounted, keep or delete
 ```
 
 ---
 
 ## Module Reference
+
+### supabaseClient.ts
+
+Exports a single `supabase` client instance (created once) and re-exports the `User` type from `@supabase/supabase-js`. All Supabase calls go through this singleton.
+
+### AuthSection.tsx
+
+`<AuthSection user={user} onSignOut={fn} />`
+
+- Signed-out collapsed state: auth bar with "Sign in" / "Create account" buttons.
+- Expanded: Google OAuth (`signInWithOAuth`) + email/password form (`signInWithPassword` / `signUp`). Sign-up sends a Supabase verification email; `emailRedirectTo` is `window.location.origin`.
+- Signed-in state: shows `user.email` + "Sign out" button.
+
+### ProgressJournal.tsx
+
+`<ProgressJournal user={user} />`
+
+Fetches all `journal_entries` for the user on mount. State:
+- `windowMonths: 3 | 6` — default 3, toggled by button pair.
+- `pageIndex: number` — 0 = most recent window, increments backward in time. Each page covers `windowMonths` months. Resets to 0 when `windowMonths` changes.
+- Window bounds: `windowEnd = today − pageIndex × windowMonths months`, `windowStart = windowEnd − windowMonths`.
+
+**SVG chart:** viewBox 660×290, padding 44/24/48/58 (top/right/bottom/left). Y axis = CP watts with 5 gridlines auto-scaled to data range ±20%. X axis = monthly ticks. Polyline + area fill + interactive circles. W′ (kJ) shown as static annotation above each node; CP + date shown in a tooltip rect on hover.
+
+**Delete:** confirmation modal (`modal-overlay` / `modal-box`). Deletes by `id` + `user_id` (double-checks RLS client-side).
 
 ### envAdjustment.ts
 
@@ -159,7 +233,7 @@ factor = clamp(tAdj × hAdj × altAdj, 0.80, 1.20)
 - MMP must be computed from raw watts stream: `GET /api/v1/activity/{id}/streams?types=watts` → `[{ type: 'watts', data: number[] }]`. `icu_power_curve` is not in the API.
 - **Auth:** Basic Auth, username = literal `API_KEY`, password = user's key.
 - **Filter:** `icu_ftp > 0` (not `has_power` — unreliable). Sport: `Run` / `VirtualRun`.
-- **Browser vs Node:** `BASE_URL` = `''` (browser, Vite proxy) or `'https://intervals.icu'` (Node). Uses `btoa()`.
+- **Browser vs Node:** `BASE_URL` = `''` (browser, Vite proxy / Netlify proxy) or `'https://intervals.icu'` (Node). Uses `btoa()`.
 
 ### effortSelector.ts
 
