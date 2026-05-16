@@ -8,18 +8,39 @@ import { supabase } from './supabaseClient.js';
 import type { User } from './supabaseClient.js';
 import type { CPResult } from './labEngine.js';
 import type { MaxEffort } from './intervalsClient.js';
+import { clearCached } from './cache.js';
+
+const LS_TOKEN  = 'ppe_intervals_access_token';
+const LS_ID     = 'ppe_intervals_athlete_id';
+const LS_NAME   = 'ppe_intervals_athlete_name';
 
 type Tab = 'lab' | 'strategy' | 'journal';
 
 export default function App() {
-  const [labCtx,    setLabCtx]    = useState<LabContext | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('lab');
-  const [user,      setUser]      = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [labCtx,             setLabCtx]             = useState<LabContext | null>(null);
+  const [activeTab,          setActiveTab]          = useState<Tab>('lab');
+  const [user,               setUser]               = useState<User | null>(null);
+  const [authReady,          setAuthReady]          = useState(false);
+  const [oauthStatus,        setOauthStatus]        = useState<string | null>(null);
 
   // Persisted Intervals.icu credentials for the logged-in user
-  const [savedAthleteId, setSavedAthleteId] = useState('');
-  const [savedApiKey,    setSavedApiKey]    = useState('');
+  const [savedAthleteId,     setSavedAthleteId]     = useState('');
+  const [savedApiKey,        setSavedApiKey]        = useState('');
+  const [savedAthleteName,   setSavedAthleteName]   = useState('');
+  const [intervalsConnected, setIntervalsConnected] = useState(false);
+
+  // ── Load data-only Intervals.icu token from localStorage on first render ────
+  useEffect(() => {
+    const token = localStorage.getItem(LS_TOKEN);
+    const id    = localStorage.getItem(LS_ID);
+    const name  = localStorage.getItem(LS_NAME);
+    if (token && id) {
+      setSavedAthleteId(id);
+      setSavedApiKey(`Bearer ${token}`);
+      setSavedAthleteName(name ?? '');
+      setIntervalsConnected(true);
+    }
+  }, []);
 
   // ── Auth listener ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -35,36 +56,169 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ── Intervals.icu OAuth callback ───────────────────────────────────────────
+  // Fires on mount when the page loads with ?code= (the redirect back from intervals.icu)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code  = params.get('code');
+    const error = params.get('error');
+    const state = params.get('state');
+
+    if (error) {
+      setOauthStatus('Intervals.icu authorisation was cancelled.');
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+    if (!code || !state) return;
+
+    // Clean the URL immediately so a refresh doesn't re-trigger
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // Verify CSRF nonce stored before the redirect
+    let parsedState: { mode: 'login' | 'connect' | 'data'; nonce: string };
+    try {
+      parsedState = JSON.parse(atob(state));
+    } catch {
+      setOauthStatus('OAuth state invalid — please try again.');
+      return;
+    }
+    const storedNonce = localStorage.getItem('oauth_nonce');
+    localStorage.removeItem('oauth_nonce');
+    if (parsedState.nonce !== storedNonce) {
+      setOauthStatus('OAuth security check failed — please try again.');
+      return;
+    }
+
+    setOauthStatus('Connecting to Intervals.icu…');
+
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const body: Record<string, string> = { code, mode: parsedState.mode };
+      if (parsedState.mode === 'connect' && session?.access_token) {
+        body.supabaseToken = session.access_token;
+      }
+
+      const res = await fetch('/.netlify/functions/intervals-oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json() as Record<string, unknown>;
+
+      if (!res.ok) {
+        setOauthStatus(`Connection failed: ${String(data.error ?? res.statusText)}`);
+        return;
+      }
+
+      if (parsedState.mode === 'data') {
+        // No Supabase — store token in localStorage for persistence
+        localStorage.setItem(LS_TOKEN,  data.intervalsToken as string);
+        localStorage.setItem(LS_ID,     data.athleteId as string);
+        localStorage.setItem(LS_NAME,   data.athleteName as string);
+        setSavedAthleteId(data.athleteId as string);
+        setSavedApiKey(`Bearer ${data.intervalsToken as string}`);
+        setSavedAthleteName(data.athleteName as string);
+        setIntervalsConnected(true);
+        setOauthStatus(null);
+        return;
+      }
+
+      if (parsedState.mode === 'login') {
+        // Sign the user into Supabase using the hashed magic-link token
+        const { error: otpErr } = await supabase.auth.verifyOtp({
+          token_hash: data.tokenHash as string,
+          type: 'magiclink',
+        });
+        if (otpErr) {
+          setOauthStatus(`Sign-in failed: ${otpErr.message}`);
+          return;
+        }
+        // onAuthStateChange will fire and update `user`
+        setSavedAthleteId(data.athleteId as string);
+        setSavedApiKey(`Bearer ${data.intervalsToken as string}`);
+        setIntervalsConnected(true);
+      } else {
+        // connect mode — refresh credentials from the profile we just updated
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('intervals_access_token')
+          .eq('id', session!.user.id)
+          .single();
+        setSavedAthleteId(data.athleteId as string);
+        setSavedApiKey(`Bearer ${profile?.intervals_access_token ?? ''}`);
+        setIntervalsConnected(true);
+      }
+
+      setOauthStatus(null);
+    })().catch((e: Error) => setOauthStatus(`Connection error: ${e.message}`));
+  }, []); // intentionally runs once on mount only
+
   // ── Load profile when user changes ─────────────────────────────────────────
   useEffect(() => {
     if (!user) {
-      setSavedAthleteId('');
-      setSavedApiKey('');
+      // Keep localStorage (data-only) credentials alive even when not signed in to Supabase
+      const token = localStorage.getItem(LS_TOKEN);
+      const id    = localStorage.getItem(LS_ID);
+      if (token && id) {
+        setSavedAthleteId(id);
+        setSavedApiKey(`Bearer ${token}`);
+        setSavedAthleteName(localStorage.getItem(LS_NAME) ?? '');
+        setIntervalsConnected(true);
+      } else {
+        setSavedAthleteId('');
+        setSavedApiKey('');
+        setSavedAthleteName('');
+        setIntervalsConnected(false);
+      }
       return;
     }
     supabase
       .from('user_profiles')
-      .select('athlete_id, api_key')
+      .select('athlete_id, api_key, intervals_access_token')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
           setSavedAthleteId(data.athlete_id ?? '');
-          setSavedApiKey(data.api_key ?? '');
+          // Prefer the OAuth token; fall back to the manually-entered API key
+          if (data.intervals_access_token) {
+            setSavedApiKey(`Bearer ${data.intervals_access_token}`);
+            setIntervalsConnected(true);
+          } else {
+            setSavedApiKey(data.api_key ?? '');
+            setIntervalsConnected(false);
+          }
         }
       });
   }, [user]);
+
+  // ── Disconnect Intervals.icu (data-only mode) ──────────────────────────────
+  const handleDisconnectIntervals = useCallback(() => {
+    const id = localStorage.getItem(LS_ID);
+    if (id) { clearCached(`mmp_v1_${id}`); clearCached(`races_v1_${id}`); }
+    localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem(LS_ID);
+    localStorage.removeItem(LS_NAME);
+    setSavedAthleteId('');
+    setSavedApiKey('');
+    setSavedAthleteName('');
+    setIntervalsConnected(false);
+  }, []);
 
   // ── Save to journal ────────────────────────────────────────────────────────
   const handleSaveToJournal = useCallback(async (result: CPResult, efforts: MaxEffort[]) => {
     if (!user) throw new Error('Not signed in');
 
-    // Upsert profile with latest credentials
+    // Upsert profile — store credential under the right column
     if (labCtx?.athleteId || labCtx?.apiKey) {
+      const isOAuth = labCtx.apiKey?.startsWith('Bearer ');
       await supabase.from('user_profiles').upsert({
         id: user.id,
         athlete_id: labCtx.athleteId,
-        api_key: labCtx.apiKey,
+        ...(isOAuth
+          ? { intervals_access_token: labCtx.apiKey.replace('Bearer ', '') }
+          : { api_key: labCtx.apiKey }),
         updated_at: new Date().toISOString(),
       });
     }
@@ -97,7 +251,15 @@ export default function App() {
           </div>
         </div>
 
-        <AuthSection user={user} onSignOut={() => setUser(null)} />
+        {oauthStatus && (
+          <div className="oauth-status-bar">{oauthStatus}</div>
+        )}
+
+        <AuthSection
+          user={user}
+          onSignOut={() => setUser(null)}
+          intervalsConnected={intervalsConnected}
+        />
 
         {/* ── Tab nav ──────────────────────────────────────────────────────── */}
         <nav className="tab-nav">
@@ -131,7 +293,9 @@ export default function App() {
             user={user}
             initialAthleteId={savedAthleteId}
             initialApiKey={savedApiKey}
+            initialAthleteName={savedAthleteName}
             onSaveToJournal={handleSaveToJournal}
+            onDisconnectIntervals={handleDisconnectIntervals}
           />
         </div>
 
@@ -155,6 +319,7 @@ export default function App() {
               athleteId={labCtx.athleteId}
               apiKey={labCtx.apiKey}
               selectedEfforts={labCtx.selectedEfforts}
+              testEnvironment={labCtx.testEnvironment}
             />
           </div>
         )}

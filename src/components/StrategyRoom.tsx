@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { syncStrategyData, fetchRecentRaces } from '../dataOrchestrator.js';
 import type { StrategyDataResult, RaceRecord } from '../dataOrchestrator.js';
 import { calculateRaceScenario, calculateCVI } from '../strategyEngine.js';
@@ -7,6 +7,8 @@ import { calcEnvAdjustment } from '../envAdjustment.js';
 import type { EnvironmentConditions } from '../envAdjustment.js';
 import type { MaxEffort } from '../intervalsClient.js';
 import { PacingSplitPlan } from './PacingSplitPlan.js';
+import { getRiegelExponent, distMetersToKey, distLabelToKey } from '../riegelLookup.js';
+import { getCached, setCached, TTL } from '../cache.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,7 @@ export interface StrategyRoomProps {
   athleteId: string;
   apiKey: string;
   selectedEfforts: MaxEffort[];
+  testEnvironment?: EnvironmentConditions;
 }
 
 type ScenarioLabel = 'Aggressive' | 'Expected' | 'Conservative';
@@ -24,6 +27,23 @@ type ScenarioLabel = 'Aggressive' | 'Expected' | 'Conservative';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_RE = 0.96;
+
+const LS = {
+  distLabel:  'ppe_strat_dist_label',
+  customKm:   'ppe_strat_custom_km',
+  gainM:      'ppe_strat_gain_m',
+  lossM:      'ppe_strat_loss_m',
+  tempC:      'ppe_strat_temp_c',
+  humidity:   'ppe_strat_humidity',
+  altitudeM:  'ppe_strat_altitude_m',
+} as const;
+
+function lsGet(key: string, fallback: string): string {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+function lsSet(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch {}
+}
 
 const DISTANCE_OPTIONS = [
   { label: '5K',            meters: 5_000  },
@@ -114,8 +134,7 @@ function ScenarioCard({
 }) {
   const cardClass = [
     'scenario-card',
-    isDefault ? 'scenario-card-expected' : '',
-    selected   ? 'scenario-card-selected' : '',
+    selected ? 'scenario-card-selected' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -169,26 +188,36 @@ export function StrategyRoom({
   athleteId,
   apiKey,
   selectedEfforts,
+  testEnvironment,
 }: StrategyRoomProps) {
 
   // ── User inputs ─────────────────────────────────────────────────────────────
-  const [distanceLabel,       setDistanceLabel]       = useState<DistanceLabel>('Marathon');
+  const [distanceLabel,       setDistanceLabel]       = useState<DistanceLabel>(() => lsGet(LS.distLabel, 'Marathon') as DistanceLabel);
   // stored in km; multiplied to meters for all physics
-  const [customDistanceKm,    setCustomDistanceKm]    = useState(42.195);
-  const [elevationGainM,      setElevationGainM]      = useState(0);
-  const [elevationLossM,      setElevationLossM]      = useState(0);
-  const [forecastTempC,       setForecastTempC]       = useState(20);
-  const [forecastHumidityPct, setForecastHumidityPct] = useState(50);
-  const [forecastAltitudeM,   setForecastAltitudeM]   = useState(0);
+  const [customDistanceKm,    setCustomDistanceKm]    = useState(() => Number(lsGet(LS.customKm, '42.195')));
+  const [elevationGainM,      setElevationGainM]      = useState(() => Number(lsGet(LS.gainM, '0')));
+  const [elevationLossM,      setElevationLossM]      = useState(() => Number(lsGet(LS.lossM, '0')));
+  const [forecastTempC,       setForecastTempC]       = useState(() => Number(lsGet(LS.tempC, '20')));
+  const [forecastHumidityPct, setForecastHumidityPct] = useState(() => Number(lsGet(LS.humidity, '50')));
+  const [forecastAltitudeM,   setForecastAltitudeM]   = useState(() => Number(lsGet(LS.altitudeM, '0')));
   const [showAdvanced,        setShowAdvanced]        = useState(false);
   const [selectedScenario,    setSelectedScenario]    = useState<ScenarioLabel>('Expected');
+  // True when the user has explicitly configured weather (or has stored values from a previous session).
+  // Prevents the orchestrator sync from overwriting race-day conditions the user set.
+  const userSetWeather = useRef<boolean>(
+    Boolean(localStorage.getItem(LS.tempC) || localStorage.getItem(LS.humidity) || localStorage.getItem(LS.altitudeM))
+  );
 
   // ── Riegel calibration ──────────────────────────────────────────────────────
   const [showRiegelCalib,    setShowRiegelCalib]    = useState(false);
   const [knownRaceDistKm,    setKnownRaceDistKm]    = useState('');
   const [knownRaceTimeStr,   setKnownRaceTimeStr]   = useState('');
   const [manualRiegel,       setManualRiegel]       = useState<number | null>(null);
-  // Race list for calibration panel (fetched on-demand when panel opens)
+  const [autoRiegelSource,   setAutoRiegelSource]   = useState<{ date: string; distKm: number; timeStr: string } | null>(null);
+  // userOverrodeRiegel: true once user explicitly selects or clears from the panel.
+  // Prevents auto-calibration from overwriting a deliberate choice.
+  const userOverrodeRiegel = useRef(false);
+  // Race list — fetched on mount (background), not on panel open
   const [raceListLoading,    setRaceListLoading]    = useState(false);
   const [raceList,           setRaceList]           = useState<RaceRecord[]>([]);
   const [raceListError,      setRaceListError]      = useState<string | null>(null);
@@ -225,10 +254,31 @@ export function StrategyRoom({
     }));
   }, [knownRaceDistKm, knownRaceTimeStr, targetDistanceM]);
 
-  // ── Sync orchestrator data — re-run when Lab result OR target distance changes ─
+  // ── Sync orchestrator data — cached per athlete + distance (4 h TTL) ─────────
   useEffect(() => {
     if (!athleteId || !apiKey || selectedEfforts.length === 0) return;
     let cancelled = false;
+
+    // Round CP to nearest 10 W so minor fluctuations don't bust the cache.
+    const cpBucket = Math.round(cpWatts / 10) * 10;
+    const cacheKey = `orch_v1_${athleteId}_${targetDistanceM}_${cpBucket}`;
+
+    const applyData = (data: StrategyDataResult) => {
+      setStrategyData(data);
+      if (!userSetWeather.current) {
+        setForecastTempC(Math.round(data.environment.temperatureC));
+        setForecastAltitudeM(Math.round(data.environment.altitudeM));
+        if (data.environment.humidityPercent != null) {
+          setForecastHumidityPct(Math.round(data.environment.humidityPercent));
+        }
+      }
+    };
+
+    const cached = getCached<StrategyDataResult>(cacheKey);
+    if (cached) {
+      applyData(cached);
+      return;
+    }
 
     setSyncLoading(true);
     setSyncError(null);
@@ -239,12 +289,8 @@ export function StrategyRoom({
     )
       .then((data) => {
         if (cancelled) return;
-        setStrategyData(data);
-        setForecastTempC(Math.round(data.environment.temperatureC));
-        setForecastAltitudeM(Math.round(data.environment.altitudeM));
-        if (data.environment.humidityPercent != null) {
-          setForecastHumidityPct(Math.round(data.environment.humidityPercent));
-        }
+        setCached(cacheKey, data, TTL.ORCHESTRATOR);
+        applyData(data);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -255,17 +301,98 @@ export function StrategyRoom({
     return () => { cancelled = true; };
   }, [cpWatts, weightKg, athleteId, apiKey, selectedEfforts, targetDistanceM]);
 
+  // ── Persist strategy inputs to localStorage on change ──────────────────────
+  // skipFirstRender prevents the initial-mount effect from marking weather as
+  // user-set when the values were just restored from localStorage defaults.
+  const skipFirstWeatherSave = useRef(true);
+
+  useEffect(() => { lsSet(LS.distLabel, distanceLabel); },           [distanceLabel]);
+  useEffect(() => { lsSet(LS.customKm,  String(customDistanceKm)); }, [customDistanceKm]);
+  useEffect(() => { lsSet(LS.gainM,     String(elevationGainM)); },   [elevationGainM]);
+  useEffect(() => { lsSet(LS.lossM,     String(elevationLossM)); },   [elevationLossM]);
+  useEffect(() => {
+    if (skipFirstWeatherSave.current) return;
+    lsSet(LS.tempC, String(forecastTempC));
+    userSetWeather.current = true;
+  }, [forecastTempC]);
+  useEffect(() => {
+    if (skipFirstWeatherSave.current) return;
+    lsSet(LS.humidity, String(forecastHumidityPct));
+    userSetWeather.current = true;
+  }, [forecastHumidityPct]);
+  useEffect(() => {
+    if (skipFirstWeatherSave.current) { skipFirstWeatherSave.current = false; return; }
+    lsSet(LS.altitudeM, String(forecastAltitudeM));
+    userSetWeather.current = true;
+  }, [forecastAltitudeM]);
+
+  // ── Fetch race list on mount — fetchRecentRaces caches internally (24 h TTL) ─
+  useEffect(() => {
+    if (!athleteId || !apiKey || raceListFetched) return;
+    setRaceListLoading(true);
+    setRaceListError(null);
+    fetchRecentRaces(athleteId, apiKey)
+      .then((races) => { setRaceList(races); setRaceListFetched(true); })
+      .catch((err: unknown) => setRaceListError((err as Error).message))
+      .finally(() => setRaceListLoading(false));
+  }, [athleteId, apiKey, raceListFetched]);
+
+  // ── Auto-calibrate Riegel from lookup table once races are available ────────
+  useEffect(() => {
+    if (!raceListFetched || raceList.length === 0) return;
+    if (userOverrodeRiegel.current) return; // user made an explicit choice — don't override
+
+    const targetKey = distLabelToKey(distanceLabel)
+      ?? (distanceLabel === 'Custom' ? distMetersToKey(targetDistanceM) : null);
+    if (!targetKey) return;
+
+    // Pick the recommended race inline (same scoring as the useMemo below)
+    let rec = raceList[0]!;
+    let bestScore = Infinity;
+    for (const race of raceList) {
+      const age = Math.floor((Date.now() - new Date(race.date).getTime()) / 86_400_000);
+      const score = (age / 180) * 0.7 + (Math.abs(race.distanceMeters - targetDistanceM) / targetDistanceM) * 0.3;
+      if (score < bestScore) { bestScore = score; rec = race; }
+    }
+
+    const knownKey = distMetersToKey(rec.distanceMeters);
+    if (!knownKey) return;
+
+    const riegel = getRiegelExponent(targetKey, knownKey, rec.movingTimeSeconds);
+    if (riegel === null) return;
+
+    setManualRiegel(riegel);
+    setAutoRiegelSource({
+      date: rec.date,
+      distKm: rec.distanceMeters / 1000,
+      timeStr: fmtRaceTime(rec.movingTimeSeconds),
+    });
+  }, [raceListFetched, raceList, distanceLabel, targetDistanceM]);
+
+  // Seed forecast fields from testEnvironment when there's no orchestrator data.
+  // Only runs once per testEnvironment change, and only when strategyData is absent.
+  useEffect(() => {
+    if (!testEnvironment || strategyData || userSetWeather.current) return;
+    setForecastTempC(Math.round(testEnvironment.temperatureC));
+    setForecastAltitudeM(Math.round(testEnvironment.altitudeM));
+    if (testEnvironment.humidityPercent != null) {
+      setForecastHumidityPct(Math.round(testEnvironment.humidityPercent));
+    }
+  }, [testEnvironment, strategyData]);
+
   // ── Reactive calculation pipeline ──────────────────────────────────────────
   const calcResult = useMemo(() => {
-    if (!strategyData) return null;
+    // Need either orchestrator data OR a manually supplied test environment
+    const effectiveEnv = testEnvironment ?? strategyData?.environment ?? null;
+    if (!effectiveEnv) return null;
 
-    const baseRE = pickBaseRE(strategyData.re);
+    const baseRE = strategyData ? pickBaseRE(strategyData.re) : DEFAULT_RE;
     const { cvi: targetCVI } = calculateCVI(targetDistanceM, elevationGainM, elevationLossM);
 
-    const testHumidity = strategyData.environment.humidityPercent ?? forecastHumidityPct;
+    const testHumidity = effectiveEnv.humidityPercent ?? forecastHumidityPct;
     const testEnv: EnvironmentConditions = {
-      altitudeM:       strategyData.environment.altitudeM,
-      temperatureC:    strategyData.environment.temperatureC,
+      altitudeM:       effectiveEnv.altitudeM,
+      temperatureC:    effectiveEnv.temperatureC,
       humidityPercent: testHumidity,
     };
     const targetEnv: EnvironmentConditions = {
@@ -280,7 +407,7 @@ export function StrategyRoom({
     // manualRiegel (from the calibration panel) overrides bracket defaults.
     const athleteForCalc = {
       cpWatts, wPrimeJoules, weightKg, baseRE,
-      trainingTerrainCVI: strategyData.trainingTerrainCVI,
+      trainingTerrainCVI: strategyData?.trainingTerrainCVI ?? 0,
       ...(manualRiegel !== null && { baseRiegel: manualRiegel }),
     };
 
@@ -291,17 +418,28 @@ export function StrategyRoom({
       envAdj.factor,
     );
 
-    // Performer cards use the main diagonal: both Riegel and RE vary together.
-    //   scenarios[0] = Aggressive Riegel (r+0.01) + Optimistic RE (+0.01)
-    //   scenarios[4] = Expected   Riegel          + Expected RE
-    //   scenarios[8] = Conservative Riegel (r−0.01) + Pessimistic RE (−0.01)
-    const aggScenario = output.scenarios[0]!;
+    // Performer cards: pick diagonal based on race duration vs TTE.
+    //
+    // For T > TTE (long race), higher r (closer to 0) → higher P → main diagonal:
+    //   Aggressive   = scenarios[0] (r+0.01, RE+0.01) → highest P + fastest time
+    //   Expected     = scenarios[4] (r,      RE)
+    //   Conservative = scenarios[8] (r−0.01, RE−0.01) → lowest P + slowest time
+    //
+    // For T < TTE (short race, e.g. 5K), the r→P relationship inverts:
+    // (T/TTE)^r with T/TTE < 1 and r < 0 → more-negative r → larger value → higher P.
+    // Anti-diagonal restores the expected ordering:
+    //   Aggressive   = scenarios[6] (r−0.01, RE+0.01) → highest P + fastest time
+    //   Expected     = scenarios[4] (r,      RE)
+    //   Conservative = scenarios[2] (r+0.01, RE−0.01) → lowest P + slowest time
+    const expTime = output.scenarios[4]!.estimatedTimeSeconds;
+    const isShortRace = expTime < 3000; // 3000 s = default TTE
+    const aggScenario = isShortRace ? output.scenarios[6]! : output.scenarios[0]!;
     const expScenario = output.scenarios[4]!;
-    const conScenario = output.scenarios[8]!;
+    const conScenario = isShortRace ? output.scenarios[2]! : output.scenarios[8]!;
 
     return { output, baseRE, envAdj, adjustedCP: cpWatts * envAdj.factor, aggScenario, expScenario, conScenario };
   }, [
-    strategyData,
+    strategyData, testEnvironment,
     targetDistanceM, elevationGainM, elevationLossM,
     forecastAltitudeM, forecastTempC, forecastHumidityPct,
     cpWatts, wPrimeJoules, weightKg,
@@ -325,21 +463,24 @@ export function StrategyRoom({
   }, [raceList, targetDistanceM]);
 
   const handleOpenRiegelPanel = () => {
-    const next = !showRiegelCalib;
-    setShowRiegelCalib(next);
-    if (next && !raceListFetched && athleteId && apiKey) {
-      setRaceListLoading(true);
-      setRaceListError(null);
-      fetchRecentRaces(athleteId, apiKey)
-        .then((races) => { setRaceList(races); setRaceListFetched(true); })
-        .catch((err: unknown) => setRaceListError((err as Error).message))
-        .finally(() => setRaceListLoading(false));
-    }
+    setShowRiegelCalib((prev) => !prev);
   };
 
   const handleSelectRaceForCalib = (race: RaceRecord) => {
     setKnownRaceDistKm((race.distanceMeters / 1000).toFixed(3));
     setKnownRaceTimeStr(fmtRaceTime(race.movingTimeSeconds));
+  };
+
+  const handleSelectRiegelRow = (r: number, isSelected: boolean) => {
+    userOverrodeRiegel.current = true;
+    setAutoRiegelSource(null);
+    setManualRiegel(isSelected ? null : r);
+  };
+
+  const handleClearRiegel = () => {
+    userOverrodeRiegel.current = true;
+    setManualRiegel(null);
+    setAutoRiegelSource(null);
   };
 
   const scenarioMap: Record<ScenarioLabel, ScenarioResult | undefined> = {
@@ -449,7 +590,8 @@ export function StrategyRoom({
             Riegel Calibration
             {manualRiegel !== null && (
               <span style={{ marginLeft: 8, color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 700 }}>
-                r = {manualRiegel.toFixed(2)} active
+                r = {manualRiegel.toFixed(2)}
+                {autoRiegelSource ? ' · auto' : ' · manual'}
               </span>
             )}
           </h2>
@@ -463,10 +605,23 @@ export function StrategyRoom({
 
         {showRiegelCalib && (
           <div style={{ marginTop: 16 }}>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 16 }}>
-              Select a recent race to use as the calibration base, or enter a result manually below.
-              Recency is the primary recommendation factor; distance similarity is secondary.
-            </p>
+            {autoRiegelSource ? (
+              <div className="warning-box" style={{ marginBottom: 16 }} role="status">
+                <span className="warning-icon">✓</span>
+                <div className="warning-body">
+                  <p>
+                    <strong>Auto-calibrated</strong> from your {autoRiegelSource.date} race
+                    ({autoRiegelSource.distKm.toFixed(2)} km · {autoRiegelSource.timeStr}).
+                    Select a different race below or pick a Riegel row to override.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+                Select a recent race to use as the calibration base, or enter a result manually below.
+                Recency is the primary recommendation factor; distance similarity is secondary.
+              </p>
+            )}
 
             {/* ── Step 1: Race list from Intervals.icu ── */}
             {raceListLoading && (
@@ -581,7 +736,7 @@ export function StrategyRoom({
                           <tr
                             key={r}
                             className={isSelected ? 'row-on' : 'row-off'}
-                            onClick={() => setManualRiegel(isSelected ? null : r)}
+                            onClick={() => handleSelectRiegelRow(r, isSelected)}
                             title={isSelected ? 'Click to deselect' : 'Click to use this Riegel'}
                           >
                             <td>
@@ -608,7 +763,7 @@ export function StrategyRoom({
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                     <button
                       style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', fontSize: '0.78rem', cursor: 'pointer', color: 'var(--text-muted)' }}
-                      onClick={() => setManualRiegel(null)}
+                      onClick={handleClearRiegel}
                     >
                       Clear — revert to TTE default
                     </button>
@@ -766,9 +921,13 @@ export function StrategyRoom({
               />
               <DetailRow
                 label="Riegel source"
-                value={manualRiegel !== null
-                  ? `Manual calibration (r = ${manualRiegel.toFixed(2)})`
-                  : 'TTE anchor (3000 s)'}
+                value={
+                  autoRiegelSource
+                    ? `Auto (${autoRiegelSource.date} · r = ${manualRiegel?.toFixed(2)})`
+                    : manualRiegel !== null
+                      ? `Manual (r = ${manualRiegel.toFixed(2)})`
+                      : 'TTE anchor (3000 s)'
+                }
               />
               <DetailRow label="Event type"  value={calcResult.output.eventType} />
               <DetailRow

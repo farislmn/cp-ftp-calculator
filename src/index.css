@@ -32,7 +32,7 @@ body {
 }
 
 /* ─── App shell ───────────────────────────────────────────────────────────── */
-.app { max-width: 800px; margin: 0 auto; padding: 32px 16px 64px; }
+.app { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
 .app-main { display: flex; flex-direction: column; gap: 0; }
 
 .app-header {
@@ -133,6 +133,7 @@ input:focus, select:focus {
   box-shadow: var(--shadow-lg);
   border-radius: 14px;
   padding: 28px;
+  overflow: hidden;
 }
 
 .prescription-header {
@@ -690,6 +691,25 @@ input:focus, select:focus {
 .push-status-success { color: var(--success); font-weight: 600; }
 .push-status-error   { color: var(--danger); }
 
+.push-scope-error {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  color: #856404;
+  margin-top: 8px;
+}
+.push-scope-error p  { margin: 0 0 8px; }
+.push-scope-error ol { margin: 0 0 0 18px; padding: 0; }
+.push-scope-error li { margin-bottom: 4px; }
+.push-scope-error code {
+  background: rgba(0,0,0,0.06);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.8em;
+}
+
 /* ─── Pillar divider ──────────────────────────────────────────────────────── */
 .pillar-divider {
   display: flex;
@@ -778,6 +798,96 @@ input:focus, select:focus {
   transition: background 0.15s;
 }
 .btn-google:hover { background: var(--surface-alt); }
+
+.btn-intervals {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid #E8521A;
+  border-radius: 8px;
+  background: #fff8f6;
+  color: #c0390a;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 8px;
+}
+.btn-intervals:hover  { background: #ffe8e0; }
+.btn-intervals.btn-sm { width: auto; padding: 5px 12px; font-size: 0.8rem; margin-bottom: 0; }
+
+.oauth-pill {
+  font-size: 0.78rem;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 500;
+}
+
+.oauth-connected-badge {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #E8521A;
+  border-radius: 8px;
+  background: #fff8f6;
+  color: #c0390a;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.lab-connect-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.intervals-oauth-connected {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: #fff8f6;
+  border: 1px solid #E8521A;
+  border-radius: 8px;
+}
+.intervals-oauth-connected .label { font-size: 0.85rem; color: var(--text-muted); flex: 1; }
+
+.oauth-status-bar {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+/* ─── Lab last-saved banner ───────────────────────────────────────────────── */
+.last-saved-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.last-saved-date {
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
 
 .auth-divider {
   display: flex;
@@ -1054,4 +1164,160 @@ input:focus, select:focus {
   color: var(--success);
   font-size: 0.85rem;
   margin-top: 10px;
+}
+
+/* ─── CP data source toggle ───────────────────────────────────────────────── */
+.cp-source-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.cp-source-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.source-pills {
+  display: flex;
+  gap: 4px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 3px;
+}
+.source-pill {
+  padding: 5px 14px;
+  border-radius: 100px;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-muted);
+  background: transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.source-pill:hover:not(.source-pill-active) { color: var(--text); }
+.source-pill-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ─── Manual CP entry form ────────────────────────────────────────────────── */
+.manual-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.manual-entry-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 2px;
+}
+.manual-col-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.manual-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.manual-input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--surface-alt);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  width: 100%;
+}
+.manual-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.manual-input-warn { border-color: #fca5a5; }
+.manual-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.manual-remove:hover { background: #fee2e2; border-color: #fca5a5; color: var(--danger); }
+.btn-add-effort {
+  align-self: flex-start;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-add-effort:hover { background: var(--accent-light); border-color: var(--accent); }
+
+.manual-env-section {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.manual-env-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.manual-env-hint {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.manual-env-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 560px) {
+  .manual-env-grid { grid-template-columns: 1fr 1fr; }
+  .manual-row { grid-template-columns: 1fr 1fr auto; }
+}
+
+/* ─── Power-Duration Curve ────────────────────────────────────────────────── */
+.pd-curve-card { padding: 20px 24px; }
+.pd-curve-wrapper { display: flex; flex-direction: column; gap: 8px; }
+.pd-curve-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.pd-curve-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
