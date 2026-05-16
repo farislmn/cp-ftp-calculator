@@ -23,12 +23,47 @@ Transitioning the SuperPower Calculator (spreadsheet) into a **"Performance Pres
 
 ---
 
-## Next Immediate Goals
+## Version
 
-### 1 — Strategy Room refinements (open)
+Current release: **v0.2.0** (2026-05-17)
 
-- `useEffect` in `StrategyRoom.tsx` re-syncs the orchestrator on every `targetDistanceM` change — may cause excess API calls if the user rapidly changes the distance dropdown. Consider debouncing. (Cache mitigates the impact for now.)
-- Pacing currently interpolates pace linearly from start to finish; CVI-adjusted pace per split (terrain-aware effort distribution) is a possible future enhancement.
+---
+
+## Next Immediate Goals (v0.3 roadmap)
+
+### 1 — Power Zones panel
+
+Display an individualized power zone table in The Lab once CP/W′ are calculated.
+
+**Zone structure:**
+- Zones 1–5: standard %CP bands (e.g. Z1 < 55%, Z2 55–75%, Z3 75–87%, Z4 87–93%, Z5 93–100%)
+- Zones above CP: derived from W′ depletion time. For a target power P > CP: `t = W′ / (P − CP)`. Landmark powers shown for durations 40 min, 20 min, 10 min, 5 min, 3 min, 1 min, 30 s above CP.
+- Output formatted as a copyable zone table the user can enter into Intervals.icu power zones manually.
+
+**Implementation notes:**
+- Pure calculation — no new API calls needed.
+- Show in both Performer (landmark durations only) and Data Nerd (full table) views.
+- Lives in `LabWorkbench.tsx` as a sub-component, rendered below the Power-Duration Curve.
+
+### 2 — Critical Pace mode
+
+A pace-based parallel to the CP/W′ model for runners without a power meter or who prefer pace-based targets.
+
+**Math model:** Same OLS regression as `labEngine.ts` but units change:
+- Inputs: effort duration (s) + average pace (min/km or min/mile), converted to average speed (m/s)
+- Regression: `Distance = CS × Duration + D′` → slope = Critical Speed (m/s), intercept = D′ (m)
+- Above-CP equivalent: `D_remaining = D′ − (actual_speed − CS) × elapsed_time`
+
+**Scope:**
+- The Lab: "Pace" mode pill alongside "Power". Manual entry accepts pace + distance or duration. No Intervals.icu fetch path for pace (manual only for now).
+- Strategy Room: when pace mode is active, scenario outputs show min/km pace instead of watts; `targetPowerWatts` field replaced by `targetPaceSecPerKm`.
+- Pacing Plan: splits shown as min/km targets instead of watts.
+
+**Toggle:** A top-level `mode: 'power' | 'pace'` state in `App.tsx`, passed as prop; Strategy Room and Pacing Plan adapt their display accordingly. Persists to localStorage (`ppe_mode`).
+
+### 3 — Strategy Room debounce (minor)
+
+- `useEffect` in `StrategyRoom.tsx` re-syncs the orchestrator on every `targetDistanceM` change. Cache mitigates impact but debouncing (~400 ms) would be cleaner.
 
 ---
 
