@@ -1,4 +1,5 @@
 import type { Split } from './components/PacingSplitPlan.js';
+import { buildAuthHeader } from './intervalsClient.js';
 
 const BASE_URL = typeof window === 'undefined' ? 'https://intervals.icu' : '';
 
@@ -16,7 +17,7 @@ export async function pushPacingPlan(
   cpWatts: number,
 ): Promise<void> {
   const headers: Record<string, string> = {
-    Authorization: 'Basic ' + btoa('API_KEY:' + apiKey),
+    Authorization: buildAuthHeader(apiKey),
     'Content-Type': 'application/json',
   };
 

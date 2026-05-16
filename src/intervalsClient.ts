@@ -1,6 +1,17 @@
+import { getCached, setCached, TTL } from './cache.js';
+
 // In a browser (Vite dev server) we route through the /api proxy to avoid CORS.
 // In Node.js (CLI scripts) we call the real host directly.
 const BASE_URL = typeof window !== 'undefined' ? '' : 'https://intervals.icu';
+
+/**
+ * Builds the Authorization header for Intervals.icu API calls.
+ * Accepts either a raw API key (Basic auth) or a Bearer token from OAuth.
+ */
+export function buildAuthHeader(apiKey: string): string {
+  if (apiKey.startsWith('Bearer ')) return apiKey;
+  return `Basic ${btoa(`API_KEY:${apiKey}`)}`;
+}
 
 /**
  * Standard durations we compute MMP for (seconds).
@@ -109,11 +120,15 @@ export async function fetchMaxEfforts(
   oldest.setDate(oldest.getDate() - daysBack);
   const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
 
+  // ── Cache check ───────────────────────────────────────────────────────────
+  const cacheKey = `mmp_v1_${athleteId}`;
+  if (typeof window !== 'undefined') {
+    const cached = getCached<FetchMaxEffortsResult>(cacheKey);
+    if (cached) return cached;
+  }
+
   // ── Authentication ────────────────────────────────────────────────────────
-  // Intervals.icu Basic Auth: username = literal "API_KEY", password = apiKey
-  // btoa is available in both modern browsers and Node.js ≥ 16.
-  const auth = `Basic ${btoa(`API_KEY:${apiKey}`)}`;
-  const headers = { Authorization: auth, Accept: 'application/json' };
+  const headers = { Authorization: buildAuthHeader(apiKey), Accept: 'application/json' };
 
   // ── Fetch activity list ───────────────────────────────────────────────────
   const listUrl =
@@ -216,5 +231,7 @@ export async function fetchMaxEfforts(
       a.durationSeconds - b.durationSeconds || b.averagePower - a.averagePower,
   );
 
-  return { efforts };
+  const result: FetchMaxEffortsResult = { efforts };
+  if (typeof window !== 'undefined') setCached(cacheKey, result, TTL.MMP_EFFORTS);
+  return result;
 }

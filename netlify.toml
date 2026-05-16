@@ -2,6 +2,10 @@
   command = "npm run build"
   publish = "dist"
 
+[functions]
+  directory    = "netlify/functions"
+  node_bundler = "esbuild"
+
 # Proxy /api/* to intervals.icu — mirrors the Vite dev server proxy
 [[redirects]]
   from   = "/api/*"

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { ScenarioResult } from '../strategyEngine.js';
 import type { ScenarioLabel } from './StrategyDashboard.js';
 import { pushPacingPlan } from '../intervalsWorkout.js';
+import { initiateIntervalsOAuth } from './AuthSection.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -249,17 +250,40 @@ function PowerChart({ splits, targetPowerW }: { splits: Split[]; targetPowerW: n
   );
 }
 
+// ─── Persistence helpers ──────────────────────────────────────────────────────
+
+const LS = {
+  splitKm:   'ppe_pacing_splitKm',
+  splitType: 'ppe_pacing_splitType',
+  devPct:    'ppe_pacing_deviationPct',
+  raceDate:  'ppe_pacing_raceDate',
+} as const;
+
+const SPLIT_TYPES: SplitType[] = ['Negative Split', 'Positive Split', 'Even Split'];
+
+function lsGet(key: string, fallback: string): string {
+  return localStorage.getItem(key) ?? fallback;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PacingSplitPlan({
   scenario, scenarioLabel, distanceMeters, weightKg, cpWatts = 0, athleteId = '', apiKey = '',
 }: PacingSplitPlanProps) {
-  const [splitEveryKm,  setSplitEveryKm]  = useState(5);
-  const [splitType,     setSplitType]     = useState<SplitType>('Negative Split');
-  const [deviationPct,  setDeviationPct]  = useState(2);
-  const [raceDate,      setRaceDate]      = useState('');
+  const [splitEveryKm,  setSplitEveryKm]  = useState(() => Number(lsGet(LS.splitKm, '5')) || 5);
+  const [splitType,     setSplitType]     = useState<SplitType>(() => {
+    const v = lsGet(LS.splitType, 'Negative Split');
+    return (SPLIT_TYPES as string[]).includes(v) ? v as SplitType : 'Negative Split';
+  });
+  const [deviationPct,  setDeviationPct]  = useState(() => Number(lsGet(LS.devPct, '2')) || 2);
+  const [raceDate,      setRaceDate]      = useState(() => lsGet(LS.raceDate, ''));
   const [pushStatus,    setPushStatus]    = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [pushError,     setPushError]     = useState<string | null>(null);
+
+  useEffect(() => { localStorage.setItem(LS.splitKm,   String(splitEveryKm)); }, [splitEveryKm]);
+  useEffect(() => { localStorage.setItem(LS.splitType, splitType); },            [splitType]);
+  useEffect(() => { localStorage.setItem(LS.devPct,    String(deviationPct)); }, [deviationPct]);
+  useEffect(() => { localStorage.setItem(LS.raceDate,  raceDate); },             [raceDate]);
 
   // 0 or empty → one interval for the whole distance
   const splitEveryM = useMemo((): number =>
@@ -418,7 +442,27 @@ export function PacingSplitPlan({
               <span className="push-status push-status-success">✓ Scheduled on Intervals.icu</span>
             )}
             {pushStatus === 'error' && pushError && (
-              <span className="push-status push-status-error">{pushError}</span>
+              pushError.includes('CALENDAR:WRITE') ? (
+                <div className="push-scope-error">
+                  <p>
+                    <strong>Calendar permission missing.</strong> Your Intervals.icu connection was made
+                    before calendar access was added. To fix:
+                  </p>
+                  <ol>
+                    <li>On <strong>intervals.icu → Settings → API → OAuth Apps</strong>, edit your app and add the <code>CALENDAR:WRITE</code> scope.</li>
+                    <li>Then reconnect below so the new permission is included in your token.</li>
+                  </ol>
+                  <button
+                    className="btn-intervals btn-sm"
+                    onClick={() => initiateIntervalsOAuth('data')}
+                    style={{ marginTop: 8 }}
+                  >
+                    Reconnect Intervals.icu
+                  </button>
+                </div>
+              ) : (
+                <span className="push-status push-status-error">{pushError}</span>
+              )
             )}
           </div>
         </>

@@ -1,6 +1,8 @@
 import type { MaxEffort } from './intervalsClient.js';
+import { buildAuthHeader } from './intervalsClient.js';
 import type { EnvironmentConditions } from './envAdjustment.js';
 import { calculateCVI } from './strategyEngine.js';
+import { getCached, setCached, TTL } from './cache.js';
 
 export type { EnvironmentConditions };
 
@@ -95,10 +97,7 @@ export interface StrategyDataResult {
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 function makeHeaders(apiKey: string): Record<string, string> {
-  return {
-    Authorization: `Basic ${btoa(`API_KEY:${apiKey}`)}`,
-    Accept: 'application/json',
-  };
+  return { Authorization: buildAuthHeader(apiKey), Accept: 'application/json' };
 }
 
 function fmtDate(d: Date): string {
@@ -371,10 +370,14 @@ export async function fetchRecentRaces(
   athleteId: string,
   apiKey: string,
 ): Promise<RaceRecord[]> {
+  const cacheKey = `races_v1_${athleteId}`;
+  const cached = getCached<RaceRecord[]>(cacheKey);
+  if (cached) return cached;
+
   const headers = makeHeaders(apiKey);
   const activities = await fetchActivityList(athleteId, headers, daysAgo(180), new Date());
 
-  return activities
+  const races = activities
     .filter(
       (a) =>
         (a.type === 'Run' || a.type === 'VirtualRun') &&
@@ -393,6 +396,9 @@ export async function fetchRecentRaces(
       elevationGainMeters: a.total_elevation_gain ?? null,
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  setCached(cacheKey, races, TTL.RACE_LIST);
+  return races;
 }
 
 // ─── Task 3: Running Effectiveness Extractor ─────────────────────────────────

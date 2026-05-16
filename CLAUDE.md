@@ -17,21 +17,17 @@ Transitioning the SuperPower Calculator (spreadsheet) into a **"Performance Pres
 ## Architecture (The 4 Pillars)
 
 1. **The Lab** — CP/W′ engine + `LabWorkbench` UI. **Live.**
-2. **The Strategy Room** — Riegel/RE race scenario engine + `StrategyRoom` UI + `PacingSplitPlan` sub-component. **Live — math verified, pacing module active, Riegel calibration panel live, push to Intervals.icu live.**
+2. **The Strategy Room** — Riegel/RE race scenario engine + `StrategyRoom` UI + `PacingSplitPlan` sub-component. **Live — math verified, pacing module active, Riegel auto-calibration live, push to Intervals.icu live.**
 3. **The Progress Journal** — Historical CP/W′ tracking. **Live — Supabase-backed, SVG line chart, 3/6-month window, Save to Journal from Lab.**
-4. **The Data Orchestrator** — Automatic context extraction from Intervals.icu (environment, training terrain CVI, RE). **Live — feeds Pillars 1 & 2.**
+4. **The Data Orchestrator** — Automatic context extraction from Intervals.icu (environment, training terrain CVI, RE). **Live — feeds Pillars 1 & 2. Results cached 4 h to avoid repeat fetches.**
 
 ---
 
 ## Next Immediate Goals
 
-### 1 — Intervals.icu OAuth (deferred)
+### 1 — Strategy Room refinements (open)
 
-Intervals.icu OAuth app registration requires a live Privacy Policy URL (`https://aturpace.netlify.app/privacy.html` — now live). Registration not yet done. Once registered, the Intervals.icu OAuth flow replaces manual API key + athlete ID entry for users who connect via Intervals.icu.
-
-### 2 — Strategy Room refinements (open)
-
-- `useEffect` in `StrategyRoom.tsx` re-syncs the orchestrator on every `targetDistanceM` change — may cause excess API calls if the user rapidly changes the distance dropdown. Consider debouncing.
+- `useEffect` in `StrategyRoom.tsx` re-syncs the orchestrator on every `targetDistanceM` change — may cause excess API calls if the user rapidly changes the distance dropdown. Consider debouncing. (Cache mitigates the impact for now.)
 - Pacing currently interpolates pace linearly from start to finish; CVI-adjusted pace per split (terrain-aware effort distribution) is a possible future enhancement.
 
 ---
@@ -45,14 +41,16 @@ Intervals.icu OAuth app registration requires a live Privacy Policy URL (`https:
 | `strategyEngine.ts` — Riegel/RE race scenarios | ✅ parity-verified (53 kg / CP 191 W / TTE 3000 s / env 98.23 % / 42 400 m — ΔW ≤ 0.04 W, ΔT ≤ 1 s) |
 | `intervalsClient.ts` — MMP extraction from streams | ✅ live-tested (13 MMP efforts, values match spreadsheet) |
 | `effortSelector.ts` — Goldilocks effort picker | ✅ complete |
-| `dataOrchestrator.ts` — Pillar 4 context sync | ✅ live-tested. Extracts environment, training terrain CVI (3 longest runs last 6 weeks), and RE. `fetchRecentRaces()` fetches the 6-month race list on demand for the Riegel panel. |
+| `cache.ts` — localStorage TTL cache | ✅ live — MMP 1 h, race list 24 h, orchestrator 4 h |
+| `riegelLookup.ts` — Riegel exponent lookup table | ✅ live — auto-calibrates from nearest past race on Strategy Room mount |
+| `dataOrchestrator.ts` — Pillar 4 context sync | ✅ live-tested. Extracts environment, training terrain CVI (3 longest runs last 6 weeks), and RE. `fetchRecentRaces()` caches 24 h. |
 | `supabaseClient.ts` — Supabase singleton | ✅ live — reads `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` env vars |
-| `components/AuthSection.tsx` — auth UI | ✅ live — Google OAuth + email/password sign-up/sign-in via Supabase; collapsed bar when signed out, user email + sign-out when signed in |
-| `components/LabWorkbench.tsx` — Pillar 1 UI | ✅ live — exports `LabContext`; fires `onLabUpdate` callback to `App.tsx`; accepts `user`, `initialAthleteId`, `initialApiKey`, `onSaveToJournal` props; shows "Save to Journal" button when signed in and CP result is available |
-| `components/StrategyRoom.tsx` — Pillar 2 UI | ✅ live — clickable scenario cards, pacing module, RE averaging. Riegel calibration panel: fetches race list on open, shows recommended race with recency + distance scoring, user picks anchor → Riegel table → selects exponent. Separate elevation gain/loss inputs for net-downhill CVI. Training terrain CVI auto-derived from orchestrator. |
-| `intervalsWorkout.ts` — push pacing plan to Intervals.icu | ✅ live — POSTs to `/api/v1/athlete/{id}/events`; description in native Intervals.icu text format using %CP zones |
-| `components/PacingSplitPlan.tsx` — Pacing sub-component | ✅ live — Negative/Positive/Even split, free km number input (0 = whole distance), SVG chart, split table, push to Intervals.icu with race date picker. `npm run test:pacing` passes (Δ = 0.000 s) |
-| `components/ProgressJournal.tsx` — Pillar 3 UI | ✅ live — SVG line chart of CP over time, W′ annotation at each node, 3/6-month window toggle, prev/next page navigation for data older than 6 months, full entry list with delete confirmation |
+| `components/AuthSection.tsx` — auth UI | ✅ live — Intervals.icu OAuth + Google OAuth + email/password. OAuth scope: `ACTIVITY:WRITE,CALENDAR:WRITE` (comma unencoded — intervals.icu separator). |
+| `components/LabWorkbench.tsx` — Pillar 1 UI | ✅ live — weight/sex/powerMeter persist to localStorage. MMP cache auto-restores on refresh (1 h TTL). "Last saved" banner shows most-recent journal CP. Disconnect clears MMP cache. |
+| `components/StrategyRoom.tsx` — Pillar 2 UI | ✅ live — all 7 race inputs persist to localStorage. Orchestrator result cached 4 h. Race list cached 24 h. Riegel auto-calibrated from nearest past race on mount. Scenario cards use diagonal-switching for correct power/time ordering at all distances. |
+| `intervalsWorkout.ts` — push pacing plan to Intervals.icu | ✅ live — uses `buildAuthHeader` (supports both OAuth Bearer and manual Basic API key). POSTs to `/api/v1/athlete/{id}/events`. |
+| `components/PacingSplitPlan.tsx` — Pacing sub-component | ✅ live — splitEveryKm/splitType/deviationPct/raceDate persist to localStorage. CALENDAR:WRITE error shows inline reconnect button. `npm run test:pacing` passes (Δ = 0.000 s) |
+| `components/ProgressJournal.tsx` — Pillar 3 UI | ✅ live — SVG line chart of CP over time, W′ annotation at each node, 3/6-month window toggle, prev/next page navigation, full entry list with delete confirmation |
 | `components/StrategyDashboard.tsx` | ⚠️ **Dead code** — `App.tsx` mounts `StrategyRoom`; this file is never rendered. Safe to delete unless a redesign resurrects it. |
 
 **Do not modify `labEngine.ts` regression logic without a full parity re-check against the `v4 Calcs` spreadsheet.**
@@ -111,6 +109,18 @@ ATHLETE_ID=iXXXXXX API_KEY=your-key WEIGHT_KG=53 CP_WATTS=190 \
 - **Lab → Strategy bridge:** `LabWorkbench` calls `onLabUpdate` with a `LabContext` object (cpWatts, wPrimeJoules, weightKg, athleteId, apiKey, selectedEfforts). `App.tsx` stores this and passes it as props to `StrategyRoom`. `StrategyRoom` calls `syncStrategyData` internally and manages all orchestrator state itself.
 - **Save to Journal:** `App.tsx` owns `handleSaveToJournal` — upserts `user_profiles` (credentials) and inserts to `journal_entries`. Called by `LabWorkbench` via `onSaveToJournal` prop.
 
+### localStorage persistence keys
+
+| Prefix | Component | What's stored |
+|---|---|---|
+| `ppe_lab_*` | LabWorkbench | weight, sex, powerMeter, lastSaved CP snapshot |
+| `ppe_lab_sel_{athleteId}` | LabWorkbench | selected effort keys per athlete |
+| `ppe_strategy_*` | StrategyRoom | distanceLabel, customKm, gainM, lossM, tempC, humidity, altitudeM |
+| `ppe_pacing_*` | PacingSplitPlan | splitEveryKm, splitType, deviationPct, raceDate |
+| `ppe_v1_mmp_v1_{athleteId}` | cache.ts | MMP efforts (1 h TTL) |
+| `ppe_v1_races_v1_{athleteId}` | cache.ts | Race list (24 h TTL) |
+| `ppe_v1_orch_v1_{athleteId}_{distM}_{cpBucket}` | cache.ts | Orchestrator result (4 h TTL) |
+
 ## Supabase Schema
 
 Two tables, both with RLS enabled (users can only access their own rows):
@@ -153,10 +163,12 @@ src/
   App.tsx                       # Root — auth state, tab nav, Lab/Strategy/Journal orchestration
   index.css                     # Global stylesheet (CSS custom properties, responsive)
   supabaseClient.ts             # Supabase client singleton (reads VITE_ env vars)
+  cache.ts                      # localStorage TTL cache — getCached/setCached/clearCached/clearAllCache
   labEngine.ts                  # CP / W′ regression — LOCKED, parity-verified
   envAdjustment.ts              # Standalone environmental adjustment factor
   strategyEngine.ts             # Pillar 2 engine — CVI, Riegel, RE, race scenarios
-  intervalsClient.ts            # MMP extraction from raw watts streams
+  riegelLookup.ts               # Riegel exponent lookup table — getRiegelExponent(), distMetersToKey()
+  intervalsClient.ts            # MMP extraction from raw watts streams; buildAuthHeader() for OAuth/Basic
   effortSelector.ts             # Goldilocks effort selector — autoSelectGoldilocksEfforts()
   dataOrchestrator.ts           # Pillar 4 — environment, prior race, RE from Intervals.icu
   intervalsWorkout.ts           # Push pacing plan to Intervals.icu as a calendar event
@@ -167,7 +179,7 @@ src/
   testOrchestrator.ts           # Orchestrator sync test
   testPacing.ts                 # Pacing split plan verifier (npm run test:pacing)
   components/
-    AuthSection.tsx              # Auth bar — Google OAuth + email sign-in/sign-up; collapsed when signed out
+    AuthSection.tsx              # Auth bar — Intervals.icu OAuth + Google OAuth + email sign-in/sign-up
     LabWorkbench.tsx             # Pillar 1 UI — config form + prescription card + workbench + Save to Journal
     StrategyRoom.tsx             # Pillar 2 UI — race setup, scenario cards, pacing module
     PacingSplitPlan.tsx          # Pacing sub-component — split table + SVG power chart + push to Intervals.icu
@@ -179,17 +191,39 @@ src/
 
 ## Module Reference
 
+### cache.ts
+
+`getCached<T>(key)` — reads from `ppe_v1_{key}` in localStorage; returns `null` if missing or expired.
+`setCached<T>(key, data, ttlMs)` — writes with expiry timestamp.
+`clearCached(key)` — removes one entry.
+`clearAllCache()` — wipes all `ppe_v1_` entries.
+
+TTL constants (ms): `TTL.MMP_EFFORTS` (1 h), `TTL.RACE_LIST` (24 h), `TTL.ORCHESTRATOR` (4 h).
+
+### riegelLookup.ts
+
+`getRiegelExponent(targetDistance, knownDistance, knownTimeSeconds): number | null`
+Looks up the Riegel exponent from a precomputed table covering four target distances (5K, 10K, HM, Marathon) × ten pace/time bands. Returns `null` when inputs are out of range.
+
+`distMetersToKey(distanceMeters): DistKey | null` — maps a distance in metres to `'5k' | '10k' | 'halfMarathon' | 'marathon'`.
+`distLabelToKey(label): DistKey | null` — maps UI labels (`'5K'`, `'10K'`, `'Half Marathon'`, `'Marathon'`) to the same keys.
+
+Riegel values in the table are negative (e.g. −0.07) matching `baseRiegel` sign convention in `strategyEngine.ts`.
+
 ### supabaseClient.ts
 
 Exports a single `supabase` client instance (created once) and re-exports the `User` type from `@supabase/supabase-js`. All Supabase calls go through this singleton.
 
 ### AuthSection.tsx
 
-`<AuthSection user={user} onSignOut={fn} />`
+`<AuthSection user={user} onSignOut={fn} intervalsConnected={bool} />`
 
 - Signed-out collapsed state: auth bar with "Sign in" / "Create account" buttons.
-- Expanded: Google OAuth (`signInWithOAuth`) + email/password form (`signInWithPassword` / `signUp`). Sign-up sends a Supabase verification email; `emailRedirectTo` is `window.location.origin`.
-- Signed-in state: shows `user.email` + "Sign out" button.
+- Expanded: Intervals.icu OAuth + Google OAuth (`signInWithOAuth`) + email/password form. Sign-up sends a Supabase verification email; `emailRedirectTo` is `window.location.origin`.
+- Signed-in state: shows display name + "Sign out". Non-Intervals users see "Connect Intervals.icu" button if not yet connected.
+- OAuth scope: `ACTIVITY:WRITE,CALENDAR:WRITE` — comma must NOT be URL-encoded (intervals.icu uses raw comma as separator; `%2C` is treated as a literal character, breaking scope parsing).
+
+`initiateIntervalsOAuth(mode)` — exported; called by `PacingSplitPlan` for the CALENDAR:WRITE reconnect flow.
 
 ### ProgressJournal.tsx
 
@@ -229,9 +263,11 @@ factor = clamp(tAdj × hAdj × altAdj, 0.80, 1.20)
 
 `fetchMaxEfforts(athleteId, apiKey, daysBack?)` — fetches the 20 most recent power-run activities, computes MMP for 13 canonical durations (120–1800 s) via O(n) sliding window. Returns `MaxEffort[]`.
 
+`buildAuthHeader(apiKey)` — returns `'Bearer {token}'` if `apiKey` starts with `'Bearer '`, otherwise `'Basic ' + btoa('API_KEY:' + apiKey)`. Used everywhere auth is sent to Intervals.icu.
+
 **Critical API details:**
 - MMP must be computed from raw watts stream: `GET /api/v1/activity/{id}/streams?types=watts` → `[{ type: 'watts', data: number[] }]`. `icu_power_curve` is not in the API.
-- **Auth:** Basic Auth, username = literal `API_KEY`, password = user's key.
+- **Auth:** `buildAuthHeader(apiKey)` — supports both OAuth Bearer tokens and manual Basic auth API keys.
 - **Filter:** `icu_ftp > 0` (not `has_power` — unreliable). Sport: `Run` / `VirtualRun`.
 - **Browser vs Node:** `BASE_URL` = `''` (browser, Vite proxy / Netlify proxy) or `'https://intervals.icu'` (Node). Uses `btoa()`.
 
@@ -247,10 +283,11 @@ factor = clamp(tAdj × hAdj × altAdj, 0.80, 1.20)
 
 ### dataOrchestrator.ts
 
-Pillar 4 — extracts environmental context, training terrain CVI, and Running Effectiveness from Intervals.icu automatically. Three extractors run in parallel via `Promise.all`. Race list is fetched separately on demand (not during the main sync).
+Pillar 4 — extracts environmental context, training terrain CVI, and Running Effectiveness from Intervals.icu automatically. Three extractors run in parallel via `Promise.all`. Race list is fetched separately (cached 24 h).
 
 **`syncStrategyData(selectedEfforts, athleteId, apiKey, targetDistanceM, cpWatts, weightKg)`**
 Returns `StrategyDataResult { environment, trainingTerrainCVI, re, warnings }`.
+*Caching is handled by the caller (`StrategyRoom.tsx`) — key `orch_v1_{athleteId}_{distM}_{cpBucket}`, TTL 4 h.*
 
 What the caller still supplies to `calculateRaceScenario`:
 - `athlete.cpWatts / wPrimeJoules / weightKg` → from the Lab
@@ -258,8 +295,8 @@ What the caller still supplies to `calculateRaceScenario`:
 - `targetConditions` (race-day env) → from user input; call `calcEnvAdjustment(result.environment, targetConditions)` to get the factor
 - `athlete.trainingTerrainCVI` → from `result.trainingTerrainCVI`
 
-**`fetchRecentRaces(athleteId, apiKey)`** *(exported, called on demand)*
-Returns `RaceRecord[]` — all `race === true` runs from the last 6 months, sorted most-recent first. Used by the Riegel Calibration panel. Each record: `{ id, date, name?, distanceMeters, movingTimeSeconds, elevationGainMeters }`. Throws on network failure.
+**`fetchRecentRaces(athleteId, apiKey)`** *(exported, cached 24 h internally)*
+Returns `RaceRecord[]` — all `race === true` runs from the last 6 months, sorted most-recent first. Cache key `races_v1_{athleteId}`. Used by the Riegel Calibration panel and auto-calibration. Each record: `{ id, date, name?, distanceMeters, movingTimeSeconds, elevationGainMeters }`. Throws on network failure.
 
 **`extractEnvironmentContext(selectedEfforts, athleteId, apiKey)`**
 Fetches the activity detail for the CP test efforts and returns `EnvironmentContext { altitudeM, temperatureC, humidityPercent }`.
@@ -271,7 +308,7 @@ Fetches the activity detail for the CP test efforts and returns `EnvironmentCont
 Returns average CVI from the 3 longest non-race runs in the last **6 weeks** (42 days). Uses `total_elevation_gain` as both climb and descent (symmetric assumption). Returns 0 with a warning when no qualifying runs exist.
 
 **`extractPriorRaceAnchor(athleteId, apiKey, targetRaceDistanceMeters?)`** *(exported, dead code — safe to delete)*
-No longer called by `syncStrategyData` or any other file. Scans last 180 days for `race === true` runs, returns the race closest to `targetRaceDistanceMeters`. The Riegel panel uses `fetchRecentRaces` instead.
+No longer called by `syncStrategyData` or any other file. The Riegel panel uses `fetchRecentRaces` instead.
 
 **`extractRunningEffectiveness(athleteId, apiKey, targetDistanceM, cpWatts, weightKg)`**
 Returns `REResult { longRunRE, intervalRE }`. Throws (strict error) if `targetDistanceM` is null.
@@ -313,15 +350,29 @@ Returns `REResult { longRunRE, intervalRE }`. Throws (strict error) if `targetDi
 
 **Riegel anchor:**
 - *With prior race (optional):* `r = log(priorPower / CP) / log(priorTime / TTE)` — derived so the curve passes through both `(priorTime, priorPower)` and `(TTE, CP)`.
-- *Without (normal path in StrategyRoom):* `r` from `athlete.baseRiegel` (set by the Riegel Calibration panel) or the distance-bracket default; anchor = `(tteSeconds, adjustedCP)`.
+- *Without (normal path in StrategyRoom):* `r` from `athlete.baseRiegel` (set by the Riegel Calibration panel or auto-calibrated) or the distance-bracket default; anchor = `(tteSeconds, adjustedCP)`.
 
-**Performer card scenario selection (StrategyRoom.tsx):**
-Cards use the main diagonal of the 3×3 matrix — Riegel and RE vary together:
-- `scenarios[0]` — Aggressive Riegel (r+0.01) + Optimistic RE (+0.01) → **Aggressive**
-- `scenarios[4]` — Expected Riegel + Expected RE → **Expected**
-- `scenarios[8]` — Conservative Riegel (r−0.01) + Pessimistic RE (−0.01) → **Conservative**
+**Performer card scenario selection (StrategyRoom.tsx) — diagonal switching:**
 
-Both axes moving together maximises the visible power spread across cards. The full 3×3 matrix remains available for inspection.
+The 3×3 scenario matrix varies Riegel (rows: r+0.01, r, r−0.01) and RE (cols: RE+0.01, RE, RE−0.01):
+
+```
+[0](r+,RE+)  [1](r+,RE)  [2](r+,RE−)
+[3](r, RE+)  [4](r, RE)  [5](r, RE−)
+[6](r−,RE+)  [7](r−,RE)  [8](r−,RE−)
+```
+
+For **T > TTE** (long race — HM, Marathon): `P = CP × (T/TTE)^r` with T/TTE > 1 and r < 0 means higher r (closer to 0) → higher P. **Main diagonal:**
+- Aggressive = `scenarios[0]` (r+0.01, RE+0.01) → highest P + fastest time
+- Expected   = `scenarios[4]`
+- Conservative = `scenarios[8]` (r−0.01, RE−0.01) → lowest P + slowest time
+
+For **T < TTE** (short race — 5K, 10K): T/TTE < 1 and r < 0 means more-negative r → higher P (the relationship inverts). **Anti-diagonal:**
+- Aggressive = `scenarios[6]` (r−0.01, RE+0.01) → highest P + fastest time
+- Expected   = `scenarios[4]`
+- Conservative = `scenarios[2]` (r+0.01, RE−0.01) → lowest P + slowest time
+
+Detection: `expTime = output.scenarios[4].estimatedTimeSeconds < 3000` (default TTE).
 
 **Closed-form solver:**
 ```
@@ -332,6 +383,8 @@ P = P₀ × (T / T₀)^r
 ### intervalsWorkout.ts
 
 `pushPacingPlan(athleteId, apiKey, raceDate, distanceMeters, totalTimeSeconds, splits, cpWatts)` — POSTs the pacing split plan to Intervals.icu as a calendar event.
+
+Uses `buildAuthHeader(apiKey)` — works for both OAuth Bearer tokens and manual Basic auth API keys.
 
 **Intervals.icu events API gotchas (verified live, May 2026):**
 - Endpoint: `POST /api/v1/athlete/{id}/events`
@@ -356,4 +409,6 @@ P = P₀ × (T / T₀)^r
 
 **Split every:** Free number input in km. `0` (or empty) collapses all splits into one step covering the full distance. `splitEveryM = (!splitEveryKm || splitEveryKm <= 0) ? distanceMeters : splitEveryKm * 1000`.
 
-**Push to Intervals.icu:** Race date picker + push button at the bottom of the section. Calls `pushPacingPlan` from `intervalsWorkout.ts`. Push status resets via `useEffect` whenever `splits` changes (prevents stale success/error banner). Requires `cpWatts` prop (raw Lab CP) for %CP zone calculation.
+**Persistence:** `splitEveryKm`, `splitType`, `deviationPct`, and `raceDate` are stored to localStorage immediately on change (`ppe_pacing_*` keys) and restored on mount. Survives page refresh.
+
+**Push to Intervals.icu:** Race date picker + push button at the bottom of the section. Calls `pushPacingPlan` from `intervalsWorkout.ts`. Push status resets via `useEffect` whenever `splits` changes (prevents stale success/error banner). Requires `cpWatts` prop (raw Lab CP) for %CP zone calculation. If the push fails with `CALENDAR:WRITE` missing, an inline "Reconnect Intervals.icu" button initiates the OAuth flow with the correct scope.

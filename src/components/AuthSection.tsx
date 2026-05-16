@@ -2,14 +2,45 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient.js';
 import type { User } from '../supabaseClient.js';
 
+const INTERVALS_CLIENT_ID = import.meta.env.VITE_INTERVALS_CLIENT_ID as string;
+// Comma-separated — intervals.icu uses comma as the scope separator.
+// Do NOT pass through encodeURIComponent (it encodes ',' to '%2C' which
+// intervals.icu treats as a literal character, not a separator).
+const INTERVALS_SCOPE     = 'ACTIVITY:WRITE,CALENDAR:WRITE';
+
 interface AuthSectionProps {
   user: User | null;
   onSignOut: () => void;
+  /** True when the signed-in user already has an Intervals.icu OAuth token stored. */
+  intervalsConnected?: boolean;
 }
 
 type AuthMode = 'idle' | 'sign-in' | 'sign-up';
 
-export function AuthSection({ user, onSignOut }: AuthSectionProps) {
+// ── OAuth helpers ─────────────────────────────────────────────────────────────
+
+function buildIntervalsOAuthUrl(mode: 'login' | 'connect' | 'data'): string {
+  const nonce = Math.random().toString(36).slice(2);
+  localStorage.setItem('oauth_nonce', nonce);
+  const state = btoa(JSON.stringify({ mode, nonce }));
+  const redirectUri = `${window.location.origin}/oauth/callback`;
+  return (
+    `https://intervals.icu/oauth/authorize` +
+    `?client_id=${INTERVALS_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${INTERVALS_SCOPE}` +
+    `&state=${encodeURIComponent(state)}`
+  );
+}
+
+/** Redirect the browser to the Intervals.icu OAuth consent screen. */
+export function initiateIntervalsOAuth(mode: 'login' | 'connect' | 'data'): void {
+  window.location.href = buildIntervalsOAuthUrl(mode);
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function AuthSection({ user, onSignOut, intervalsConnected = false }: AuthSectionProps) {
   const [mode, setMode]         = useState<AuthMode>('idle');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -42,10 +73,7 @@ export function AuthSection({ user, onSignOut }: AuthSectionProps) {
       if (error) {
         setMessage({ text: error.message, ok: false });
       } else {
-        setMessage({
-          text: 'Check your email for a verification link, then sign in.',
-          ok: true,
-        });
+        setMessage({ text: 'Check your email for a verification link, then sign in.', ok: true });
         setMode('sign-in');
       }
     } else {
@@ -59,7 +87,6 @@ export function AuthSection({ user, onSignOut }: AuthSectionProps) {
         setMessage(null);
       }
     }
-
     setBusy(false);
   }
 
@@ -68,11 +95,30 @@ export function AuthSection({ user, onSignOut }: AuthSectionProps) {
     onSignOut();
   }
 
-  // ── Logged-in state ────────────────────────────────────────────────────────
+  // ── Logged-in state ───────────────────────────────────────────────────────
   if (user) {
+    const isIntervalsUser = user.email?.endsWith('@aturpace.app') ?? false;
+    const displayName = isIntervalsUser
+      ? (user.user_metadata?.full_name as string | undefined) ?? 'Intervals.icu user'
+      : user.email ?? '';
+
     return (
       <div className="auth-bar">
-        <span className="auth-user">{user.email}</span>
+        <span className="auth-user">
+          {isIntervalsUser && <IntervalsIcon />} {displayName}
+        </span>
+        {!isIntervalsUser && (
+          intervalsConnected ? (
+            <span className="oauth-pill">Intervals.icu connected</span>
+          ) : (
+            <button
+              className="btn-intervals btn-sm"
+              onClick={() => initiateIntervalsOAuth('connect')}
+            >
+              <IntervalsIcon /> Connect Intervals.icu
+            </button>
+          )
+        )}
         <button className="btn-ghost btn-sm" onClick={handleSignOut}>Sign out</button>
       </div>
     );
@@ -96,19 +142,21 @@ export function AuthSection({ user, onSignOut }: AuthSectionProps) {
     <div className="auth-panel card">
       <div className="auth-panel-header">
         <h3>{mode === 'sign-up' ? 'Create account' : 'Sign in'}</h3>
-        <button
-          className="btn-ghost btn-sm"
-          onClick={() => { setMode('idle'); setMessage(null); }}
-        >
+        <button className="btn-ghost btn-sm" onClick={() => { setMode('idle'); setMessage(null); }}>
           Cancel
         </button>
       </div>
 
       <button
-        className="btn-google"
-        onClick={handleGoogle}
+        className="btn-intervals"
+        onClick={() => initiateIntervalsOAuth('login')}
         disabled={busy}
       >
+        <IntervalsIcon />
+        Continue with Intervals.icu
+      </button>
+
+      <button className="btn-google" onClick={handleGoogle} disabled={busy}>
         <GoogleIcon />
         Continue with Google
       </button>
@@ -160,6 +208,16 @@ export function AuthSection({ user, onSignOut }: AuthSectionProps) {
         <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
       </p>
     </div>
+  );
+}
+
+function IntervalsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: 'inline', verticalAlign: 'middle' }}>
+      <rect width="24" height="24" rx="4" fill="#E8521A"/>
+      <path d="M6 17l4-10 4 10M8.5 13h3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M16 7v10" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
   );
 }
 
