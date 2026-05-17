@@ -99,7 +99,10 @@ export function calculatePowerZones(
   const k = wPrime / cp; // W'/CP ratio in seconds
 
   // ── Race-derived anchor powers (RE=1.0, flat course, no env adjustment) ──────
-  const raceAthlete = { cpWatts: cp, wPrimeJoules: wPrime, weightKg, baseRE: 1.0, tteSeconds: 3000 };
+  // baseRiegel: −0.10 reflects real-world fatigue decay at marathon/HM distances.
+  // The bracket default (−0.06) is calibrated for short efforts and gives marathon
+  // power ~91% CP, which is too high. −0.10 yields ~85% CP, matching Palladino targets.
+  const raceAthlete = { cpWatts: cp, wPrimeJoules: wPrime, weightKg, baseRE: 1.0, tteSeconds: 3000, baseRiegel: -0.10 };
 
   let marathonPowerW: number;
   let hmPowerW: number;
