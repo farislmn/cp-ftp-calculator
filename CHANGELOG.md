@@ -8,8 +8,47 @@ All notable changes to the Performance Prescription Engine.
 
 ### Planned
 
-- **Power Zones panel** (`LabWorkbench.tsx`) — individualized zone table derived from CP/W′. Zones 1–5 as %CP bands; zones above CP calculated from W′ depletion time (`t = W′ / (P − CP)`), giving landmark durations (e.g. 5 min, 3 min, 1 min, 30 s above CP). Output formatted for manual entry into Intervals.icu power zones.
 - **Critical Pace mode** — pace-based equivalent of the CP/W′ model for runners without a power meter. Uses the same OLS regression on Distance vs Duration (slope = Critical Speed in m/s, intercept = D′ in metres). Covers The Lab (pace effort input), Strategy Room (pace-based scenarios), and Pacing Plan (min/km splits). Toggle between Power mode and Pace mode throughout the app.
+
+---
+
+## [0.3.0] — 2026-05-17
+
+### Added
+
+- **Individualized Zone Calculator tab** (`powerZoneEngine.ts`, `components/PowerZones.tsx`, `App.tsx`) — 4th tab in the app. Derives individualized Palladino power zones from CP and W′ using the W′/CP ratio (k seconds) as the primary individualization driver. Three outputs:
+
+  1. **7-zone table + Sweet Spot** — for manual entry into Intervals.icu power zones. Zone boundaries:
+     - Z1 (Active Recovery): 0–80% CP, with Z1A/B/C sub-zone descriptors
+     - Z2 (Aerobic Efficiency): 80%–marathon race power
+     - Z3 (Extensive Threshold): marathon power–`clamp(102% − k×0.077%, 95%, 99%)` CP
+     - Z4 (Intensive Threshold): Z3 upper–(200% − Z3%) CP (symmetric around CP)
+     - Z5 (VO2Max): Z4 upper–`(1 + k/375)` CP (PDC at k×3.75 s ≈ 6.25 min)
+     - Z6 (Anaerobic Capacity): Z5 upper–`(1 + k/120)` CP (PDC at k×2.0 s)
+     - Z7 (Neuromuscular Power): Z6 upper → no ceiling
+     - Sweet Spot overlay: marathon → HM race power, displayed after Z7 (matches Intervals.icu layout)
+     - Marathon/HM race powers derived from `calculateRaceScenario` (RE=1.0, flat, scenarios[4]); falls back to 85%/90% CP if unavailable
+     - "Copy for Intervals.icu" button copies the zone table as plain text
+
+  2. **Above-CP interval power targets** — uses Palladino's formula `P = CP + X × (W′/t)` with zone-specific X fractions reverse-engineered from Palladino screenshots at k=60s:
+
+     | Zone | Duration | t_long/t_short | X_lower/X_upper | %CP at k=60s |
+     |---|---|---|---|---|
+     | Near-Threshold | 7–10 min | 600s/420s | −0.30/0.21 | 97–103% |
+     | Supra-Threshold | 5–6 min | 360s/300s | 0.20/0.50 | 103–110% |
+     | VO2Max | 2:30–3:00 | 180s/150s | 0.20/0.525 | 107–121% |
+     | Intensive Max Aerobic | 1:00–1:30 | 90s/60s | 0.20/0.42 | 112–142% |
+     | RWC | 0:30–0:45 | 45s/30s | 0.20/0.415 | 125–183% |
+
+     Scales correctly for any k — athletes with higher W′ see proportionally higher targets.
+
+  3. **Sub-threshold training bands** — fixed %CP ranges from Palladino Levels Comparison Grid (Level 4 column):
+     - Sub-Threshold 1 (near 10–15K power): 96–99% CP
+     - Sub-Threshold 2 (near HM power): 92–95% CP
+     - Sub-Threshold 3 (near 30K power): 89–92% CP
+     - Marathon Pace Tempo (in long run): 86–89% CP
+
+  Tab always mounts once labCtx exists (same `display:none` pattern as Strategy Room). Gate card shown when no Lab data is available.
 
 ---
 

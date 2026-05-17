@@ -25,27 +25,13 @@ Transitioning the SuperPower Calculator (spreadsheet) into a **"Performance Pres
 
 ## Version
 
-Current release: **v0.2.0** (2026-05-17)
+Current release: **v0.3.0** (2026-05-17)
 
 ---
 
-## Next Immediate Goals (v0.3 roadmap)
+## Next Immediate Goals (v0.4 roadmap)
 
-### 1 — Power Zones panel
-
-Display an individualized power zone table in The Lab once CP/W′ are calculated.
-
-**Zone structure:**
-- Zones 1–5: standard %CP bands (e.g. Z1 < 55%, Z2 55–75%, Z3 75–87%, Z4 87–93%, Z5 93–100%)
-- Zones above CP: derived from W′ depletion time. For a target power P > CP: `t = W′ / (P − CP)`. Landmark powers shown for durations 40 min, 20 min, 10 min, 5 min, 3 min, 1 min, 30 s above CP.
-- Output formatted as a copyable zone table the user can enter into Intervals.icu power zones manually.
-
-**Implementation notes:**
-- Pure calculation — no new API calls needed.
-- Show in both Performer (landmark durations only) and Data Nerd (full table) views.
-- Lives in `LabWorkbench.tsx` as a sub-component, rendered below the Power-Duration Curve.
-
-### 2 — Critical Pace mode
+### 1 — Critical Pace mode
 
 A pace-based parallel to the CP/W′ model for runners without a power meter or who prefer pace-based targets.
 
@@ -61,7 +47,7 @@ A pace-based parallel to the CP/W′ model for runners without a power meter or 
 
 **Toggle:** A top-level `mode: 'power' | 'pace'` state in `App.tsx`, passed as prop; Strategy Room and Pacing Plan adapt their display accordingly. Persists to localStorage (`ppe_mode`).
 
-### 3 — Strategy Room debounce (minor)
+### 2 — Strategy Room debounce (minor)
 
 - `useEffect` in `StrategyRoom.tsx` re-syncs the orchestrator on every `targetDistanceM` change. Cache mitigates impact but debouncing (~400 ms) would be cleaner.
 
@@ -86,6 +72,8 @@ A pace-based parallel to the CP/W′ model for runners without a power meter or 
 | `intervalsWorkout.ts` — push pacing plan to Intervals.icu | ✅ live — uses `buildAuthHeader` (supports both OAuth Bearer and manual Basic API key). POSTs to `/api/v1/athlete/{id}/events`. |
 | `components/PacingSplitPlan.tsx` — Pacing sub-component | ✅ live — splitEveryKm/splitType/deviationPct/raceDate persist to localStorage. CALENDAR:WRITE error shows inline reconnect button. `npm run test:pacing` passes (Δ = 0.000 s) |
 | `components/ProgressJournal.tsx` — Pillar 3 UI | ✅ live — SVG line chart of CP over time, W′ annotation at each node, 3/6-month window toggle, prev/next page navigation, full entry list with delete confirmation |
+| `powerZoneEngine.ts` — individualized zone calculator | ✅ live — Palladino 7-zone system + SS. Z3 boundary = `clamp(102% − k×0.077%, 95%, 99%)`. Above-CP intervals via `P = CP + X × (W′/t)` with zone-specific X fractions. Sub-threshold bands from Palladino Levels Grid. |
+| `components/PowerZones.tsx` — Individualized Zones UI | ✅ live — 4th tab. Zone table (Z1–Z7 + SS), above-CP interval targets (5 zones), sub-threshold training bands. "Copy for Intervals.icu" button. |
 | `components/StrategyDashboard.tsx` | ⚠️ **Dead code** — `App.tsx` mounts `StrategyRoom`; this file is never rendered. Safe to delete unless a redesign resurrects it. |
 
 **Do not modify `labEngine.ts` regression logic without a full parity re-check against the `v4 Calcs` spreadsheet.**
@@ -140,7 +128,7 @@ ATHLETE_ID=iXXXXXX API_KEY=your-key WEIGHT_KG=53 CP_WATTS=190 \
 `App.tsx` manages auth state (Supabase `onAuthStateChange`), tab navigation, and the `LabContext` bridge between pillars.
 
 - **Auth:** `user` (Supabase `User | null`) is read from `supabase.auth.getSession()` on load, then kept live via `onAuthStateChange`. On sign-in, the user's `user_profiles` row is fetched to pre-fill `savedAthleteId` / `savedApiKey`.
-- **Tab nav:** Three tabs — The Lab, Strategy Room, Progress Journal. `LabWorkbench` and `StrategyRoom` (once `labCtx` exists) are **always mounted** and toggled via `display: none` so their internal state survives tab switches. Progress Journal is conditionally mounted (requires auth).
+- **Tab nav:** Four tabs — The Lab, Strategy Room, Progress Journal, Individualized Zones. `LabWorkbench`, `StrategyRoom` (once `labCtx` exists), and `PowerZones` (once `labCtx` exists) are **always mounted** and toggled via `display: none` so their internal state survives tab switches. Progress Journal is conditionally mounted (requires auth).
 - **Lab → Strategy bridge:** `LabWorkbench` calls `onLabUpdate` with a `LabContext` object (cpWatts, wPrimeJoules, weightKg, athleteId, apiKey, selectedEfforts). `App.tsx` stores this and passes it as props to `StrategyRoom`. `StrategyRoom` calls `syncStrategyData` internally and manages all orchestrator state itself.
 - **Save to Journal:** `App.tsx` owns `handleSaveToJournal` — upserts `user_profiles` (credentials) and inserts to `journal_entries`. Called by `LabWorkbench` via `onSaveToJournal` prop.
 
@@ -188,14 +176,16 @@ create table public.journal_entries (
 ```
 index.html                      # Vite HTML entry point
 netlify.toml                    # Netlify build config + API proxy + SPA fallback
+netlify/functions/
+  intervals-oauth.ts            # Serverless OAuth token exchange (login / connect / data modes)
 public/
   mockup.html                   # Static UI mockup — not part of the app build
   privacy.html                  # Hosted privacy policy (https://aturpace.netlify.app/privacy.html)
   tos.html                      # Hosted terms of service (https://aturpace.netlify.app/tos.html)
-vite.config.ts                  # Vite config — proxies /api → intervals.icu (dev only; netlify.toml handles prod)
+vite.config.ts                  # Vite config — proxies /api → intervals.icu + localOAuthPlugin (dev OAuth)
 src/
   main.tsx                      # React entry point
-  App.tsx                       # Root — auth state, tab nav, Lab/Strategy/Journal orchestration
+  App.tsx                       # Root — auth state, tab nav, Lab/Strategy/Journal/Zones orchestration
   index.css                     # Global stylesheet (CSS custom properties, responsive)
   supabaseClient.ts             # Supabase client singleton (reads VITE_ env vars)
   cache.ts                      # localStorage TTL cache — getCached/setCached/clearCached/clearAllCache
@@ -206,6 +196,7 @@ src/
   intervalsClient.ts            # MMP extraction from raw watts streams; buildAuthHeader() for OAuth/Basic
   effortSelector.ts             # Goldilocks effort selector — autoSelectGoldilocksEfforts()
   dataOrchestrator.ts           # Pillar 4 — environment, prior race, RE from Intervals.icu
+  powerZoneEngine.ts            # Individualized zone calculator — Palladino 7-zone system + SS + interval targets
   intervalsWorkout.ts           # Push pacing plan to Intervals.icu as a calendar event
   autoCp.ts                     # Full-pipeline CLI script
   test.ts                       # Lab Engine parity verifier
@@ -219,6 +210,7 @@ src/
     StrategyRoom.tsx             # Pillar 2 UI — race setup, scenario cards, pacing module
     PacingSplitPlan.tsx          # Pacing sub-component — split table + SVG power chart + push to Intervals.icu
     ProgressJournal.tsx          # Pillar 3 UI — SVG CP-over-time chart + entry list + delete
+    PowerZones.tsx               # Individualized Zones tab — zone table, interval targets, sub-threshold bands
     StrategyDashboard.tsx        # ⚠️ Alternate Pillar 2 UI — not mounted, keep or delete
 ```
 
@@ -447,3 +439,49 @@ Uses `buildAuthHeader(apiKey)` — works for both OAuth Bearer tokens and manual
 **Persistence:** `splitEveryKm`, `splitType`, `deviationPct`, and `raceDate` are stored to localStorage immediately on change (`ppe_pacing_*` keys) and restored on mount. Survives page refresh.
 
 **Push to Intervals.icu:** Race date picker + push button at the bottom of the section. Calls `pushPacingPlan` from `intervalsWorkout.ts`. Push status resets via `useEffect` whenever `splits` changes (prevents stale success/error banner). Requires `cpWatts` prop (raw Lab CP) for %CP zone calculation. If the push fails with `CALENDAR:WRITE` missing, an inline "Reconnect Intervals.icu" button initiates the OAuth flow with the correct scope.
+
+### powerZoneEngine.ts
+
+`calculatePowerZones(cp, wPrime, weightKg): PowerZoneResult` — pure calculation, no API calls.
+
+**k = W′/CP** (seconds) is the individualization driver throughout.
+
+**Zone boundaries:**
+```
+Z1 upper  = 0.80 × CP
+Z2 upper  = marathon race power (calculateRaceScenario, RE=1.0, scenarios[4], flat course)
+Z3 upper  = clamp(1.02 − k × 0.00077, 0.95, 0.99) × CP
+Z4 upper  = (2.00 − Z3_upper/CP) × CP   [symmetric around CP]
+Z5 upper  = (1 + k/375) × CP            [PDC at k×3.75 s ≈ 6.25 min when k=60s → 116% CP]
+Z6 upper  = (1 + k/120) × CP            [PDC at k×2.0 s = 2 min when k=60s → 150% CP]
+Z7        = no ceiling
+SS        = marathon power → HM power (overlay, appended after Z7 in the zones array)
+```
+
+SS falls back to 85%/90% CP if `calculateRaceScenario` throws (e.g. degenerate inputs).
+
+**Above-CP interval targets** — `P = CP + X × (W′/t)` with zone-specific X fractions reverse-engineered from Palladino screenshots at k=60s. `lowerW = palladinoPower(tLong, xLower)`, `upperW = palladinoPower(tShort, xUpper)`:
+
+| Zone | Duration | t_long | t_short | X_lower | X_upper | %CP at k=60s |
+|---|---|---|---|---|---|---|
+| Near-Threshold | 7–10 min | 600s | 420s | −0.30 | 0.21 | 97–103% |
+| Supra-Threshold | 5–6 min | 360s | 300s | 0.20 | 0.50 | 103–110% |
+| VO2Max | 2:30–3:00 | 180s | 150s | 0.20 | 0.525 | 107–121% |
+| Intensive Max Aerobic | 1:00–1:30 | 90s | 60s | 0.20 | 0.42 | 112–142% |
+| RWC | 0:30–0:45 | 45s | 30s | 0.20 | 0.415 | 125–183% |
+
+**Sub-threshold bands** — fixed %CP ranges from Palladino Levels Grid (Level 4 column):
+- Sub-Threshold 1 (near 10–15K power): 96–99% CP
+- Sub-Threshold 2 (near HM power): 92–95% CP
+- Sub-Threshold 3 (near 30K power): 89–92% CP
+- Marathon Pace Tempo: 86–89% CP
+
+### netlify/functions/intervals-oauth.ts
+
+Serverless function for Intervals.icu OAuth token exchange. Handles three modes (set via `?mode=` query param):
+
+- `login` — exchanges auth code for token, creates/updates a Supabase user row, sets session cookie
+- `connect` — links an Intervals.icu athlete to an existing Supabase user (updates `user_profiles`)
+- `data` — returns the raw token only (manual API key flow)
+
+The file intentionally avoids importing `@netlify/functions` and instead defines minimal Netlify event/response types inline, keeping the dependency tree small. The same logic runs locally via `localOAuthPlugin` in `vite.config.ts`, which intercepts `GET /netlify/functions/intervals-oauth` during dev so OAuth works without deploying.

@@ -4,6 +4,7 @@ import type { LabContext } from './components/LabWorkbench.js';
 import { StrategyRoom } from './components/StrategyRoom.js';
 import { AuthSection } from './components/AuthSection.js';
 import { ProgressJournal } from './components/ProgressJournal.js';
+import { PowerZones } from './components/PowerZones.js';
 import { supabase } from './supabaseClient.js';
 import type { User } from './supabaseClient.js';
 import type { CPResult } from './labEngine.js';
@@ -14,7 +15,7 @@ const LS_TOKEN  = 'ppe_intervals_access_token';
 const LS_ID     = 'ppe_intervals_athlete_id';
 const LS_NAME   = 'ppe_intervals_athlete_name';
 
-type Tab = 'lab' | 'strategy' | 'journal';
+type Tab = 'lab' | 'strategy' | 'journal' | 'zones';
 
 export default function App() {
   const [labCtx,             setLabCtx]             = useState<LabContext | null>(null);
@@ -281,6 +282,12 @@ export default function App() {
           >
             Progress Journal
           </button>
+          <button
+            className={activeTab === 'zones' ? 'tab-btn active' : 'tab-btn'}
+            onClick={() => setActiveTab('zones')}
+          >
+            Individualized Zones
+          </button>
         </nav>
       </header>
 
@@ -333,6 +340,21 @@ export default function App() {
               <p>Sign in to view your Progress Journal.</p>
             </div>
           )
+        )}
+
+        {/* ── Individualized Zones — always mounted when labCtx exists ─────── */}
+        {labCtx && (
+          <div style={{ display: activeTab === 'zones' ? 'block' : 'none' }}>
+            <PowerZones labCtx={labCtx} />
+          </div>
+        )}
+        {!labCtx && activeTab === 'zones' && (
+          <div className="card tab-gate">
+            <p>Run a Lab session first to generate individualized power zones.</p>
+            <button className="btn-primary btn-sm" onClick={() => setActiveTab('lab')}>
+              Go to The Lab
+            </button>
+          </div>
         )}
 
       </main>
