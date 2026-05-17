@@ -133,12 +133,12 @@ export function PowerZones({ labCtx, calibratedRiegel }: Props) {
                   }}
                 >
                   <div>
-                    <span style={{ fontWeight: 700, color: colors.text, fontSize: '0.88rem' }}>
+                    <div style={{ fontWeight: 700, color: colors.text, fontSize: '0.88rem' }}>
                       Sweet Spot
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: colors.text, opacity: 0.75, marginLeft: 8 }}>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: colors.text, opacity: 0.75, marginTop: 2 }}>
                       descriptive overlay — spans Z2/Z3
-                    </span>
+                    </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <span style={{ fontWeight: 700, fontSize: '0.95rem', color: colors.text }}>
