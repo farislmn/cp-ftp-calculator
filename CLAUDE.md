@@ -25,7 +25,7 @@ Transitioning the SuperPower Calculator (spreadsheet) into a **"Performance Pres
 
 ## Version
 
-Current release: **v0.3.0** (2026-05-17)
+Current release: **v0.3.1** (2026-05-17)
 
 ---
 
@@ -68,12 +68,12 @@ A pace-based parallel to the CP/W′ model for runners without a power meter or 
 | `supabaseClient.ts` — Supabase singleton | ✅ live — reads `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` env vars |
 | `components/AuthSection.tsx` — auth UI | ✅ live — Intervals.icu OAuth + Google OAuth + email/password. OAuth scope: `ACTIVITY:WRITE,CALENDAR:WRITE` (comma unencoded — intervals.icu separator). |
 | `components/LabWorkbench.tsx` — Pillar 1 UI | ✅ live — weight/sex/powerMeter persist to localStorage. MMP cache auto-restores on refresh (1 h TTL). "Last saved" banner shows most-recent journal CP. Disconnect clears MMP cache. |
-| `components/StrategyRoom.tsx` — Pillar 2 UI | ✅ live — all 7 race inputs persist to localStorage. Orchestrator result cached 4 h. Race list cached 24 h. Riegel auto-calibrated from nearest past race on mount. Scenario cards use diagonal-switching for correct power/time ordering at all distances. |
+| `components/StrategyRoom.tsx` — Pillar 2 UI | ✅ live — all 7 race inputs persist to localStorage. Orchestrator result cached 4 h. Race list cached 24 h. Riegel auto-calibrated from nearest past race on mount. Scenario cards use diagonal-switching. Exposes `onRiegelChange` prop — fires whenever `manualRiegel` changes so `App.tsx` can forward it to PowerZones. |
 | `intervalsWorkout.ts` — push pacing plan to Intervals.icu | ✅ live — uses `buildAuthHeader` (supports both OAuth Bearer and manual Basic API key). POSTs to `/api/v1/athlete/{id}/events`. |
 | `components/PacingSplitPlan.tsx` — Pacing sub-component | ✅ live — splitEveryKm/splitType/deviationPct/raceDate persist to localStorage. CALENDAR:WRITE error shows inline reconnect button. `npm run test:pacing` passes (Δ = 0.000 s) |
 | `components/ProgressJournal.tsx` — Pillar 3 UI | ✅ live — SVG line chart of CP over time, W′ annotation at each node, 3/6-month window toggle, prev/next page navigation, full entry list with delete confirmation |
-| `powerZoneEngine.ts` — individualized zone calculator | ✅ live — Palladino 7-zone system + SS. Z3 boundary = `clamp(102% − k×0.077%, 95%, 99%)`. Above-CP intervals via `P = CP + X × (W′/t)` with zone-specific X fractions. Sub-threshold bands from Palladino Levels Grid. |
-| `components/PowerZones.tsx` — Individualized Zones UI | ✅ live — 4th tab. Zone table (Z1–Z7 + SS), above-CP interval targets (5 zones), sub-threshold training bands. "Copy for Intervals.icu" button. |
+| `powerZoneEngine.ts` — individualized zone calculator | ✅ live — Palladino 7-zone system + SS. Z3 boundary = `clamp(102% − k×0.077%, 95%, 99%)`. Z2 upper = marathon power via calibrated Riegel (personal from Strategy Room, or −0.10 default). Above-CP intervals via `P = CP + X × (W′/t)`. Sub-threshold bands from Palladino Levels Grid. |
+| `components/PowerZones.tsx` — Individualized Zones UI | ✅ live — 4th tab. Zone table (Z1–Z7 + SS after Z7), above-CP interval targets (5 zones), sub-threshold bands. Header shows active Riegel (`r = X.XX ✓` personal or `(default)`). "Copy for Intervals.icu" button. |
 | `components/StrategyDashboard.tsx` | ⚠️ **Dead code** — `App.tsx` mounts `StrategyRoom`; this file is never rendered. Safe to delete unless a redesign resurrects it. |
 
 **Do not modify `labEngine.ts` regression logic without a full parity re-check against the `v4 Calcs` spreadsheet.**
@@ -442,14 +442,17 @@ Uses `buildAuthHeader(apiKey)` — works for both OAuth Bearer tokens and manual
 
 ### powerZoneEngine.ts
 
-`calculatePowerZones(cp, wPrime, weightKg): PowerZoneResult` — pure calculation, no API calls.
+`calculatePowerZones(cp, wPrime, weightKg, baseRiegel?): PowerZoneResult` — pure calculation, no API calls.
+
+`baseRiegel` — optional personal Riegel exponent forwarded from `StrategyRoom` via `App.tsx`. Falls back to `DEFAULT_ZONE_RIEGEL = −0.10` when absent. The result includes `riegelUsed: number` and `riegelIsPersonal: boolean` so the UI can indicate the source.
 
 **k = W′/CP** (seconds) is the individualization driver throughout.
 
 **Zone boundaries:**
 ```
 Z1 upper  = 0.80 × CP
-Z2 upper  = marathon race power (calculateRaceScenario, RE=1.0, scenarios[4], flat course)
+Z2 upper  = marathon race power (calculateRaceScenario, RE=1.0, scenarios[4], flat course,
+            baseRiegel = personal or −0.10)
 Z3 upper  = clamp(1.02 − k × 0.00077, 0.95, 0.99) × CP
 Z4 upper  = (2.00 − Z3_upper/CP) × CP   [symmetric around CP]
 Z5 upper  = (1 + k/375) × CP            [PDC at k×3.75 s ≈ 6.25 min when k=60s → 116% CP]
@@ -457,6 +460,8 @@ Z6 upper  = (1 + k/120) × CP            [PDC at k×2.0 s = 2 min when k=60s →
 Z7        = no ceiling
 SS        = marathon power → HM power (overlay, appended after Z7 in the zones array)
 ```
+
+**Why −0.10 as the default (not the bracket default −0.06):** −0.06 is calibrated for shorter efforts and gives marathon power ≈ 91% CP — too high for an aerobic Z2 boundary. −0.10 reflects real-world fatigue decay at marathon distance and yields ≈ 85% CP, matching Palladino zone targets.
 
 SS falls back to 85%/90% CP if `calculateRaceScenario` throws (e.g. degenerate inputs).
 

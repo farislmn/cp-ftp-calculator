@@ -12,6 +12,19 @@ All notable changes to the Performance Prescription Engine.
 
 ---
 
+## [0.3.1] — 2026-05-17
+
+### Fixed
+
+- **Z2 ceiling too high** (`powerZoneEngine.ts`) — race-power zone anchors (Z2 upper, SS lower/upper) were computed with the distance-bracket default Riegel of −0.06, placing marathon power at ~91% CP and making Z2 span 80–91%. Real-world fatigue decay at marathon distance is better modelled at −0.10, which yields ~85% CP and a correct ~5% aerobic band. Default changed to `DEFAULT_ZONE_RIEGEL = −0.10`.
+- **Sweet Spot label concatenation** (`PowerZones.tsx`) — "Sweet Spot" and "descriptive overlay — spans Z2/Z3" rendered as adjacent inline spans with only a CSS `marginLeft` gap, which collapsed in practice. Changed to stacked `<div>` elements with `marginTop: 2`.
+
+### Changed
+
+- **Dynamic Riegel for zone anchors** (`powerZoneEngine.ts`, `PowerZones.tsx`, `StrategyRoom.tsx`, `App.tsx`) — `calculatePowerZones` now accepts an optional `baseRiegel` parameter. `StrategyRoom` exposes a new `onRiegelChange?: (riegel: number | null) => void` prop and fires it via `useEffect` whenever `manualRiegel` changes. `App.tsx` stores the value as `calibratedRiegel` and passes it to `PowerZones`, which forwards it into `calculatePowerZones`. The zone header displays `r = X.XX ✓` (personal calibration active) or `r = X.XX (default)` (fallback −0.10 in use). Zones recompute automatically when the Strategy Room Riegel changes.
+
+---
+
 ## [0.3.0] — 2026-05-17
 
 ### Added
