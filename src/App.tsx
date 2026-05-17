@@ -19,6 +19,7 @@ type Tab = 'lab' | 'strategy' | 'journal' | 'zones';
 
 export default function App() {
   const [labCtx,             setLabCtx]             = useState<LabContext | null>(null);
+  const [calibratedRiegel,   setCalibratedRiegel]   = useState<number | null>(null);
   const [activeTab,          setActiveTab]          = useState<Tab>('lab');
   const [user,               setUser]               = useState<User | null>(null);
   const [authReady,          setAuthReady]          = useState(false);
@@ -327,6 +328,7 @@ export default function App() {
               apiKey={labCtx.apiKey}
               selectedEfforts={labCtx.selectedEfforts}
               testEnvironment={labCtx.testEnvironment}
+              onRiegelChange={setCalibratedRiegel}
             />
           </div>
         )}
@@ -345,7 +347,7 @@ export default function App() {
         {/* ── Individualized Zones — always mounted when labCtx exists ─────── */}
         {labCtx && (
           <div style={{ display: activeTab === 'zones' ? 'block' : 'none' }}>
-            <PowerZones labCtx={labCtx} />
+            <PowerZones labCtx={labCtx} calibratedRiegel={calibratedRiegel} />
           </div>
         )}
         {!labCtx && activeTab === 'zones' && (

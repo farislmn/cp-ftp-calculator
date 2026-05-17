@@ -5,6 +5,7 @@ import type { PowerZoneResult } from '../powerZoneEngine.js';
 
 interface Props {
   labCtx: LabContext | null;
+  calibratedRiegel: number | null;
 }
 
 // ─── Zone colour palette ──────────────────────────────────────────────────────
@@ -37,17 +38,17 @@ function buildCopyText(result: PowerZoneResult, cp: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function PowerZones({ labCtx }: Props) {
+export function PowerZones({ labCtx, calibratedRiegel }: Props) {
   const [copied, setCopied] = useState(false);
 
   const result = useMemo<PowerZoneResult | null>(() => {
     if (!labCtx) return null;
     try {
-      return calculatePowerZones(labCtx.cpWatts, labCtx.wPrimeJoules, labCtx.weightKg);
+      return calculatePowerZones(labCtx.cpWatts, labCtx.wPrimeJoules, labCtx.weightKg, calibratedRiegel ?? undefined);
     } catch {
       return null;
     }
-  }, [labCtx]);
+  }, [labCtx, calibratedRiegel]);
 
   if (!labCtx || !result) {
     return (
@@ -80,6 +81,10 @@ export function PowerZones({ labCtx }: Props) {
             <div className="section-label" style={{ marginBottom: 4 }}>Individualized Zone Calculator</div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               CP {Math.round(cp)} W · W′ {Math.round(labCtx.wPrimeJoules / 1000 * 10) / 10} kJ · k = {result.kSeconds}s
+              {' · '}
+              <span title={result.riegelIsPersonal ? 'Calibrated from your Strategy Room race data' : 'Default — calibrate in Strategy Room for a personal value'}>
+                r = {result.riegelUsed.toFixed(2)}{result.riegelIsPersonal ? ' ✓' : ' (default)'}
+              </span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

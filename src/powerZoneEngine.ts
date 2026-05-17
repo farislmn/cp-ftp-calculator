@@ -40,6 +40,10 @@ export interface PowerZoneResult {
   tenKPowerW: number;
   intervalTargets: IntervalTarget[];
   subThresholdBands: SubThresholdBand[];
+  /** Riegel exponent used for race-power zone anchors */
+  riegelUsed: number;
+  /** true = personal calibration from Strategy Room; false = default −0.10 */
+  riegelIsPersonal: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -91,18 +95,24 @@ const INTERVAL_SPECS: IntervalSpec[] = [
 
 // ─── Core calculation ─────────────────────────────────────────────────────────
 
+const DEFAULT_ZONE_RIEGEL = -0.10;
+
 export function calculatePowerZones(
   cp: number,
   wPrime: number,
   weightKg: number,
+  baseRiegel?: number,
 ): PowerZoneResult {
   const k = wPrime / cp; // W'/CP ratio in seconds
 
+  const riegelUsed      = baseRiegel ?? DEFAULT_ZONE_RIEGEL;
+  const riegelIsPersonal = baseRiegel !== undefined;
+
   // ── Race-derived anchor powers (RE=1.0, flat course, no env adjustment) ──────
-  // baseRiegel: −0.10 reflects real-world fatigue decay at marathon/HM distances.
-  // The bracket default (−0.06) is calibrated for short efforts and gives marathon
-  // power ~91% CP, which is too high. −0.10 yields ~85% CP, matching Palladino targets.
-  const raceAthlete = { cpWatts: cp, wPrimeJoules: wPrime, weightKg, baseRE: 1.0, tteSeconds: 3000, baseRiegel: -0.10 };
+  // Uses the athlete's calibrated Riegel from the Strategy Room when available.
+  // Falls back to −0.10, which reflects real-world fatigue decay at marathon/HM
+  // distances better than the bracket default (−0.06).
+  const raceAthlete = { cpWatts: cp, wPrimeJoules: wPrime, weightKg, baseRE: 1.0, tteSeconds: 3000, baseRiegel: riegelUsed };
 
   let marathonPowerW: number;
   let hmPowerW: number;
@@ -267,5 +277,7 @@ export function calculatePowerZones(
     tenKPowerW,
     intervalTargets,
     subThresholdBands,
+    riegelUsed,
+    riegelIsPersonal,
   };
 }

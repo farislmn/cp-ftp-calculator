@@ -20,6 +20,7 @@ export interface StrategyRoomProps {
   apiKey: string;
   selectedEfforts: MaxEffort[];
   testEnvironment?: EnvironmentConditions;
+  onRiegelChange?: (riegel: number | null) => void;
 }
 
 type ScenarioLabel = 'Aggressive' | 'Expected' | 'Conservative';
@@ -189,6 +190,7 @@ export function StrategyRoom({
   apiKey,
   selectedEfforts,
   testEnvironment,
+  onRiegelChange,
 }: StrategyRoomProps) {
 
   // ── User inputs ─────────────────────────────────────────────────────────────
@@ -217,6 +219,9 @@ export function StrategyRoom({
   // userOverrodeRiegel: true once user explicitly selects or clears from the panel.
   // Prevents auto-calibration from overwriting a deliberate choice.
   const userOverrodeRiegel = useRef(false);
+
+  useEffect(() => { onRiegelChange?.(manualRiegel); }, [manualRiegel, onRiegelChange]);
+
   // Race list — fetched on mount (background), not on panel open
   const [raceListLoading,    setRaceListLoading]    = useState(false);
   const [raceList,           setRaceList]           = useState<RaceRecord[]>([]);
