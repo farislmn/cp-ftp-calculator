@@ -15,10 +15,11 @@ export function buildAuthHeader(apiKey: string): string {
 
 /**
  * Standard durations we compute MMP for (seconds).
- * Spread across the 120–1800 s window to give the CP regression good leverage.
+ * Matches the 8 durations shown in the Lab workbench effort table.
+ * 2400 s (40 min) is the upper bound accepted by the CP regression engine.
  */
 const CP_SAMPLE_DURATIONS = [
-  120, 180, 240, 300, 360, 480, 600, 720, 900, 1080, 1200, 1500, 1800,
+  180, 300, 600, 720, 900, 1200, 1800, 2400,
 ] as const;
 
 /**
@@ -31,7 +32,7 @@ const RECENT_THRESHOLD_DAYS = 42; // 6 weeks
  * Maximum number of activities to fetch streams for.
  * Caps the number of secondary HTTP calls (one per activity).
  */
-const MAX_ACTIVITIES = 20;
+const MAX_ACTIVITIES = 50;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -226,10 +227,42 @@ export async function fetchMaxEfforts(
   }
 
   // Sort: duration ascending; within same duration, highest power first
-  const efforts = Array.from(bests.values()).sort(
+  const sorted = Array.from(bests.values()).sort(
     (a, b) =>
       a.durationSeconds - b.durationSeconds || b.averagePower - a.averagePower,
   );
+
+  // Collapse same-duration pairs (recent + historical tier) into a single row
+  // when the power difference is within 5% AND at least one effort is ≤ 60 days old.
+  //
+  // 5% threshold rationale: within-session MMP CV for trained runners is 3–5%.
+  // A genuine fitness shift (e.g. peak block → off-season) typically exceeds 8%.
+  // 5% = ~1.5× session noise, safely below a real fitness difference.
+  const TWO_MONTHS_MS = 60 * 24 * 60 * 60 * 1000;
+  const COLLAPSE_PCT  = 0.05;
+  const now = Date.now();
+
+  const efforts: MaxEffort[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    const cur  = sorted[i];
+    const next = sorted[i + 1];
+    if (next && next.durationSeconds === cur.durationSeconds) {
+      // cur is always the higher-power entry (sort puts it first)
+      const diffPct = (cur.averagePower - next.averagePower) / cur.averagePower;
+      const atLeastOneRecent =
+        now - new Date(cur.date  + 'T00:00:00').getTime() <= TWO_MONTHS_MS ||
+        now - new Date(next.date + 'T00:00:00').getTime() <= TWO_MONTHS_MS;
+
+      if (diffPct <= COLLAPSE_PCT && atLeastOneRecent) {
+        efforts.push(cur); // keep the stronger effort, drop the weaker duplicate
+        i += 2;
+        continue;
+      }
+    }
+    efforts.push(cur);
+    i++;
+  }
 
   const result: FetchMaxEffortsResult = { efforts };
   if (typeof window !== 'undefined') setCached(cacheKey, result, TTL.MMP_EFFORTS);

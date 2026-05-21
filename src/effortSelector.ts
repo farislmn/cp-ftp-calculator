@@ -19,19 +19,17 @@ export const effortKey = (e: MaxEffort): string =>
 /**
  * Comparator that sorts efforts by:
  *   1. Closest duration to `target` (ascending absolute delta)
- *   2. Most recent date
- *   3. Highest power (tiebreak)
- *
- * This means an exactly-180 s effort always sorts above a 181 s one, and
- * among exact matches the newest activity wins.
+ *   2. Highest power — the CP model needs true maximal efforts; a harder effort
+ *      from any date beats a weaker recent one
+ *   3. Most recent date (tiebreak when power is identical)
  */
-function byTargetDurationThenRecency(target: number) {
+function byTargetDurationThenPower(target: number) {
   return (a: MaxEffort, b: MaxEffort): number => {
     const durDelta = Math.abs(a.durationSeconds - target) - Math.abs(b.durationSeconds - target);
     if (durDelta !== 0) return durDelta;
-    const dateDelta = new Date(b.date).getTime() - new Date(a.date).getTime();
-    if (dateDelta !== 0) return dateDelta;
-    return b.averagePower - a.averagePower;
+    const powerDelta = b.averagePower - a.averagePower;
+    if (powerDelta !== 0) return powerDelta;
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
   };
 }
 
@@ -60,8 +58,8 @@ export function autoSelectGoldilocksEfforts(allEfforts: MaxEffort[]): MaxEffort[
     (e) => e.durationSeconds >= MEDIUM_MIN && e.durationSeconds <= MEDIUM_MAX,
   );
 
-  const shortPick  = [...shortBracket].sort(byTargetDurationThenRecency(SHORT_TARGET))[0];
-  const mediumPick = [...mediumBracket].sort(byTargetDurationThenRecency(MEDIUM_TARGET))[0];
+  const shortPick  = [...shortBracket].sort(byTargetDurationThenPower(SHORT_TARGET))[0];
+  const mediumPick = [...mediumBracket].sort(byTargetDurationThenPower(MEDIUM_TARGET))[0];
 
   // Happy path — both brackets have data
   if (shortPick && mediumPick) {

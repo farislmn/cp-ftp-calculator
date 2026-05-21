@@ -6,9 +6,32 @@ All notable changes to the Performance Prescription Engine.
 
 ## [Unreleased]
 
+### UI Polish (in progress — 2026-05-20)
+
+Changes made during `/impeccable live` sessions. Not yet committed.
+
+#### Done
+
+- **Lab "Show detail" / "Hide detail" toggle** (`LabWorkbench.tsx`) — renamed "Data Nerd" button to a state-aware label: shows "Show detail" when collapsed and "Hide detail" when expanded.
+- **Workbench above PD curve** (`LabWorkbench.tsx`) — when expanded, the Data Workbench section now renders above the Power-Duration Curve card (was below). Layout change only; no logic affected.
+- **Workbench two-column layout** (`LabWorkbench.tsx`, `index.css`) — workbench card uses `wb-two-col` grid: stats panel (200px, CP / W′ / R²) on the left, effort table on the right. CSS added under `/* ─── Advanced card */`.
+- **Distance select custom arrow** (`index.css`) — native select arrow replaced with inline SVG chevron positioned at `right: 24px` via `appearance: none` + `background-image`. Applied globally to all `<select>` elements.
+- **Strategy Room "Details" toggle** (`StrategyRoom.tsx`) — renamed "Data Nerd" button to "Details".
+
+#### Pending (live session artifacts in source)
+
+- **`strategy-detail-grid` polish** (`StrategyRoom.tsx`) — 4 CSS variants generated for session `88abf542` (V1: stronger type contrast / no row dividers; V2: unified surface with column dividers; V3: accent-background callout rows; V4: monospace values). Variant wrapper still present in source — needs accept or discard before commit.
+- **"Strategy Metrics" h3 alignment** (`StrategyRoom.tsx`) — heading sits visually lower than other section headings inside `.advanced-card`. Previous variant attempt discarded; needs another pass.
+
 ### Planned
 
 - **Critical Pace mode** — pace-based equivalent of the CP/W′ model for runners without a power meter. Uses the same OLS regression on Distance vs Duration (slope = Critical Speed in m/s, intercept = D′ in metres). Covers The Lab (pace effort input), Strategy Room (pace-based scenarios), and Pacing Plan (min/km splits). Toggle between Power mode and Pace mode throughout the app.
+- **Strategy Room debounce** — scenario recalculation fires on every keystroke for numeric inputs (elevation gain/loss, temp, humidity, altitude). Add debounce (~300 ms) to reduce jank.
+
+### Design / Mockup
+
+- **Mockup v1 complete** (`mockup/`) — 4-tab static HTML mockup (The Lab, Strategy Room, Progress Journal, Individualized Zones) aligned to a unified design system. Files: `lab.html` (reference), `strategy.html`, `journal.html`, `zones.html`. Tooling: `align_tabs.py` re-applies design tokens idempotently to the 3 non-Lab files. Full design spec saved to `memory/mockup_design_v1.md`.
+- **Mockup v2 brainstorm pending** — layout, chart, and zone table presentation alternatives to be explored in a fresh session.
 
 ---
 

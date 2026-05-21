@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LabWorkbench } from './components/LabWorkbench.js';
 import type { LabContext } from './components/LabWorkbench.js';
 import { StrategyRoom } from './components/StrategyRoom.js';
@@ -17,6 +17,165 @@ const LS_NAME   = 'ppe_intervals_athlete_name';
 
 type Tab = 'lab' | 'strategy' | 'journal' | 'zones';
 
+const TAB_META: Record<Tab, { title: string; sub: string }> = {
+  lab:      { title: 'The Lab',             sub: 'CP · W′ from maximal efforts'       },
+  strategy: { title: 'Strategy Room',       sub: 'Race scenario planner'              },
+  journal:  { title: 'Progress Journal',    sub: 'CP over time'                       },
+  zones:    { title: 'Individualized Zones', sub: 'Palladino 7-zone prescription'     },
+};
+
+// ── Nav icons ─────────────────────────────────────────────────────────────────
+
+function IconLab() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3h8M10 3v7l-5 9h14l-5-9V3"/>
+      <line x1="7.5" y1="14" x2="16.5" y2="14"/>
+    </svg>
+  );
+}
+
+function IconStrategy() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/>
+      <circle cx="12" cy="12" r="3"/>
+      <line x1="12" y1="2" x2="12" y2="5"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
+      <line x1="2"  y1="12" x2="5"  y2="12"/>
+      <line x1="19" y1="12" x2="22" y2="12"/>
+    </svg>
+  );
+}
+
+function IconJournal() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="22 7 13 16 9 11 2 18"/>
+      <polyline points="16 7 22 7 22 13"/>
+    </svg>
+  );
+}
+
+function IconZones() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6"  y1="20" x2="6"  y2="14"/>
+    </svg>
+  );
+}
+
+const NAV_ICONS: Record<Tab, React.ReactElement> = {
+  lab:      <IconLab />,
+  strategy: <IconStrategy />,
+  journal:  <IconJournal />,
+  zones:    <IconZones />,
+};
+
+const NAV_LABELS: Record<Tab, string> = {
+  lab:      'The Lab',
+  strategy: 'Strategy Room',
+  journal:  'Progress Journal',
+  zones:    'Individualized Zones',
+};
+
+const NAV_LABELS_MOBILE: Record<Tab, string> = {
+  lab:      'The Lab',
+  strategy: 'Strategy',
+  journal:  'Journal',
+  zones:    'Zones',
+};
+
+// ── Focus trap for modal dialogs ─────────────────────────────────────────────
+
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+function useFocusTrap(containerRef: React.RefObject<HTMLElement | null>, active: boolean) {
+  useEffect(() => {
+    if (!active || !containerRef.current) return;
+    const el = containerRef.current;
+    const nodes = el.querySelectorAll<HTMLElement>(FOCUSABLE);
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last)  { e.preventDefault(); first?.focus(); }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [active, containerRef]);
+}
+
+// ── Sidebar footer ────────────────────────────────────────────────────────────
+
+interface SidebarFooterProps {
+  user: User | null;
+  savedAthleteName: string;
+  intervalsConnected: boolean;
+  onSignInClick: () => void;
+  onSignOut: () => void;
+}
+
+function SidebarFooter({ user, savedAthleteName, intervalsConnected, onSignInClick, onSignOut }: SidebarFooterProps) {
+  const isConnected = intervalsConnected || !!user;
+  const rawName     = savedAthleteName || user?.email?.split('@')[0] || '';
+  const displayName = rawName;
+  const initials    = rawName.slice(0, 2).toUpperCase() || '??';
+
+  if (!isConnected) {
+    return (
+      <div className="sidebar-footer">
+        <button className="sidebar-signin-btn" onClick={onSignInClick}>
+          Sign in
+        </button>
+        <div className="sidebar-footer-links">
+          <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
+          <span>·</span>
+          <a href="/tos.html" target="_blank" rel="noopener">Terms</a>
+        </div>
+      </div>
+    );
+  }
+
+  const statusLine = intervalsConnected
+    ? 'Connected · Intervals.icu'
+    : user ? 'Account only' : '';
+
+  return (
+    <div className="sidebar-footer">
+      <div className="sidebar-athlete">
+        <div className="sidebar-avatar">{initials}</div>
+        <div className="sidebar-athlete-info">
+          <div className="sidebar-athlete-name">{displayName}</div>
+          {statusLine && <div className="sidebar-athlete-sub">{statusLine}</div>}
+        </div>
+      </div>
+      <div className="sidebar-footer-actions">
+        <button className="sidebar-signout-btn" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+      <div className="sidebar-footer-links">
+        <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
+        <span>·</span>
+        <a href="/tos.html" target="_blank" rel="noopener">Terms</a>
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const [labCtx,             setLabCtx]             = useState<LabContext | null>(null);
   const [calibratedRiegel,   setCalibratedRiegel]   = useState<number | null>(null);
@@ -24,14 +183,55 @@ export default function App() {
   const [user,               setUser]               = useState<User | null>(null);
   const [authReady,          setAuthReady]          = useState(false);
   const [oauthStatus,        setOauthStatus]        = useState<string | null>(null);
+  const [showAuthPanel,      setShowAuthPanel]      = useState(false);
+  const authPanelRef  = useRef<HTMLDivElement>(null);
+  const mobileNavRef  = useRef<HTMLElement>(null);
+  const lastScrollY   = useRef(0);
 
-  // Persisted Intervals.icu credentials for the logged-in user
+  useEffect(() => {
+    const onScroll = () => {
+      const y     = window.scrollY;
+      const delta = y - lastScrollY.current;
+      const nav   = mobileNavRef.current;
+      if (nav) {
+        if (y <= 0) {
+          nav.classList.remove('nav-hidden');
+        } else if (delta > 5) {
+          nav.classList.add('nav-hidden');
+        } else if (delta < -8) {
+          nav.classList.remove('nav-hidden');
+        }
+      }
+      lastScrollY.current = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  useFocusTrap(authPanelRef, showAuthPanel && !user);
+
+  // Close auth panel on Escape — attached to document so it fires regardless of
+  // which element inside the panel has focus (more reliable than onKeyDown on the backdrop).
+  useEffect(() => {
+    if (!showAuthPanel || user) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowAuthPanel(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showAuthPanel, user]);
+
+  // Persisted Intervals.icu credentials
   const [savedAthleteId,     setSavedAthleteId]     = useState('');
   const [savedApiKey,        setSavedApiKey]        = useState('');
   const [savedAthleteName,   setSavedAthleteName]   = useState('');
   const [intervalsConnected, setIntervalsConnected] = useState(false);
 
-  // ── Load data-only Intervals.icu token from localStorage on first render ────
+  // Close auth panel when user signs in
+  useEffect(() => {
+    if (user) setShowAuthPanel(false);
+  }, [user]);
+
+  // ── Load data-only Intervals.icu token from localStorage ──────────────────
   useEffect(() => {
     const token = localStorage.getItem(LS_TOKEN);
     const id    = localStorage.getItem(LS_ID);
@@ -44,7 +244,7 @@ export default function App() {
     }
   }, []);
 
-  // ── Auth listener ──────────────────────────────────────────────────────────
+  // ── Auth listener ─────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -58,8 +258,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── Intervals.icu OAuth callback ───────────────────────────────────────────
-  // Fires on mount when the page loads with ?code= (the redirect back from intervals.icu)
+  // ── Intervals.icu OAuth callback ──────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code  = params.get('code');
@@ -73,10 +272,8 @@ export default function App() {
     }
     if (!code || !state) return;
 
-    // Clean the URL immediately so a refresh doesn't re-trigger
     window.history.replaceState({}, '', window.location.pathname);
 
-    // Verify CSRF nonce stored before the redirect
     let parsedState: { mode: 'login' | 'connect' | 'data'; nonce: string };
     try {
       parsedState = JSON.parse(atob(state));
@@ -114,7 +311,6 @@ export default function App() {
       }
 
       if (parsedState.mode === 'data') {
-        // No Supabase — store token in localStorage for persistence
         localStorage.setItem(LS_TOKEN,  data.intervalsToken as string);
         localStorage.setItem(LS_ID,     data.athleteId as string);
         localStorage.setItem(LS_NAME,   data.athleteName as string);
@@ -127,7 +323,6 @@ export default function App() {
       }
 
       if (parsedState.mode === 'login') {
-        // Sign the user into Supabase using the hashed magic-link token
         const { error: otpErr } = await supabase.auth.verifyOtp({
           token_hash: data.tokenHash as string,
           type: 'magiclink',
@@ -136,12 +331,10 @@ export default function App() {
           setOauthStatus(`Sign-in failed: ${otpErr.message}`);
           return;
         }
-        // onAuthStateChange will fire and update `user`
         setSavedAthleteId(data.athleteId as string);
         setSavedApiKey(`Bearer ${data.intervalsToken as string}`);
         setIntervalsConnected(true);
       } else {
-        // connect mode — refresh credentials from the profile we just updated
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('intervals_access_token')
@@ -156,10 +349,9 @@ export default function App() {
     })().catch((e: Error) => setOauthStatus(`Connection error: ${e.message}`));
   }, []); // intentionally runs once on mount only
 
-  // ── Load profile when user changes ─────────────────────────────────────────
+  // ── Load profile when user changes ───────────────────────────────────────
   useEffect(() => {
     if (!user) {
-      // Keep localStorage (data-only) credentials alive even when not signed in to Supabase
       const token = localStorage.getItem(LS_TOKEN);
       const id    = localStorage.getItem(LS_ID);
       if (token && id) {
@@ -183,7 +375,6 @@ export default function App() {
       .then(({ data }) => {
         if (data) {
           setSavedAthleteId(data.athlete_id ?? '');
-          // Prefer the OAuth token; fall back to the manually-entered API key
           if (data.intervals_access_token) {
             setSavedApiKey(`Bearer ${data.intervals_access_token}`);
             setIntervalsConnected(true);
@@ -195,7 +386,7 @@ export default function App() {
       });
   }, [user]);
 
-  // ── Disconnect Intervals.icu (data-only mode) ──────────────────────────────
+  // ── Disconnect Intervals.icu ──────────────────────────────────────────────
   const handleDisconnectIntervals = useCallback(() => {
     const id = localStorage.getItem(LS_ID);
     if (id) { clearCached(`mmp_v1_${id}`); clearCached(`races_v1_${id}`); }
@@ -208,11 +399,17 @@ export default function App() {
     setIntervalsConnected(false);
   }, []);
 
-  // ── Save to journal ────────────────────────────────────────────────────────
+  // ── Sign out (both Supabase + Intervals) ──────────────────────────────────
+  const handleSignOut = useCallback(async () => {
+    handleDisconnectIntervals();
+    if (user) await supabase.auth.signOut();
+    // onAuthStateChange fires and clears user state
+  }, [user, handleDisconnectIntervals]);
+
+  // ── Save to journal ───────────────────────────────────────────────────────
   const handleSaveToJournal = useCallback(async (result: CPResult, efforts: MaxEffort[]) => {
     if (!user) throw new Error('Not signed in');
 
-    // Upsert profile — store credential under the right column
     if (labCtx?.athleteId || labCtx?.apiKey) {
       const isOAuth = labCtx.apiKey?.startsWith('Bearer ');
       await supabase.from('user_profiles').upsert({
@@ -243,129 +440,208 @@ export default function App() {
 
   if (!authReady) return null;
 
+  const tabMeta = TAB_META[activeTab];
+
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="app-header-top">
-          <div>
-            <h1>Performance Prescription Engine</h1>
-            <p>Critical Power · W′ · Race Strategy</p>
-          </div>
+    <>
+    <a href="#main-content" className="skip-link">Skip to content</a>
+    <div className="shell">
+
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-mark">SuperPower</div>
+          <div className="sidebar-logo-name">Performance<br />Prescription Engine</div>
         </div>
 
-        {oauthStatus && (
-          <div className="oauth-status-bar">{oauthStatus}</div>
-        )}
-
-        <AuthSection
-          user={user}
-          onSignOut={() => setUser(null)}
-          intervalsConnected={intervalsConnected}
-        />
-
-        {/* ── Tab nav ──────────────────────────────────────────────────────── */}
-        <nav className="tab-nav">
-          <button
-            className={activeTab === 'lab' ? 'tab-btn active' : 'tab-btn'}
-            onClick={() => setActiveTab('lab')}
-          >
-            The Lab
-          </button>
-          <button
-            className={activeTab === 'strategy' ? 'tab-btn active' : 'tab-btn'}
-            onClick={() => setActiveTab('strategy')}
-          >
-            Strategy Room
-          </button>
-          <button
-            className={activeTab === 'journal' ? 'tab-btn active' : 'tab-btn'}
-            onClick={() => setActiveTab('journal')}
-          >
-            Progress Journal
-          </button>
-          <button
-            className={activeTab === 'zones' ? 'tab-btn active' : 'tab-btn'}
-            onClick={() => setActiveTab('zones')}
-          >
-            Individualized Zones
-          </button>
-        </nav>
-      </header>
-
-      <main className="app-main">
-
-        {/* ── The Lab — always mounted so state survives tab switches ─────── */}
-        <div style={{ display: activeTab === 'lab' ? 'block' : 'none' }}>
-          <LabWorkbench
-            onLabUpdate={setLabCtx}
-            user={user}
-            initialAthleteId={savedAthleteId}
-            initialApiKey={savedApiKey}
-            initialAthleteName={savedAthleteName}
-            onSaveToJournal={handleSaveToJournal}
-            onDisconnectIntervals={handleDisconnectIntervals}
-          />
-        </div>
-
-        {/* ── Strategy Room gate (only when no lab data) ───────────────────── */}
-        {!labCtx && activeTab === 'strategy' && (
-          <div className="card tab-gate">
-            <p>Run a Lab session first to unlock the Strategy Room.</p>
-            <button className="btn-primary btn-sm" onClick={() => setActiveTab('lab')}>
-              Go to The Lab
+        <nav className="sidebar-nav" aria-label="Sidebar navigation">
+          <div className="sidebar-nav-label">Navigate</div>
+          {(['lab', 'strategy', 'journal', 'zones'] as Tab[]).map(tab => (
+            <button
+              key={tab}
+              className={`nav-item${activeTab === tab ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab)}
+              aria-current={activeTab === tab ? 'page' : undefined}
+            >
+              {NAV_ICONS[tab]}
+              {NAV_LABELS[tab]}
             </button>
+          ))}
+        </nav>
+
+        <SidebarFooter
+          user={user}
+          savedAthleteName={savedAthleteName}
+          intervalsConnected={intervalsConnected}
+          onSignInClick={() => setShowAuthPanel(true)}
+          onSignOut={handleSignOut}
+        />
+      </aside>
+
+      {/* ── Shell main ────────────────────────────────────────────────────── */}
+      <div className="shell-main">
+
+        {/* ── Mobile tab bar ──────────────────────────────────────────────── */}
+        <nav ref={mobileNavRef} className="mobile-tab-nav" aria-label="Mobile navigation">
+          {(['lab', 'strategy', 'journal', 'zones'] as Tab[]).map(tab => (
+            <button
+              key={tab}
+              className={`mobile-tab-btn${activeTab === tab ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab)}
+              aria-current={activeTab === tab ? 'page' : undefined}
+            >
+              {NAV_LABELS_MOBILE[tab]}
+            </button>
+          ))}
+          {/* Mobile-only auth ─────────────────────────────────────────────── */}
+          <div className="mobile-nav-auth">
+            {!(intervalsConnected || !!user) ? (
+              <button className="mobile-signin-btn" onClick={() => setShowAuthPanel(true)}>
+                Sign in
+              </button>
+            ) : (
+              <div className="mobile-user-pill">
+                <div className="mobile-avatar" title={savedAthleteName || user?.email || ''}>
+                  {(savedAthleteName || user?.email?.split('@')[0] || '??').slice(0, 2).toUpperCase()}
+                </div>
+                <button className="mobile-signout-btn" onClick={handleSignOut}>
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
+        </nav>
+
+        {/* ── Topbar ──────────────────────────────────────────────────────── */}
+        <header className="topbar">
+          <div>
+            <div className="topbar-title">{tabMeta.title}</div>
+            <div className="topbar-sub">{tabMeta.sub}</div>
+          </div>
+          {intervalsConnected && (
+            <>
+              <div className="topbar-divider" />
+              <div className="topbar-status">
+                <div className="topbar-status-dot" aria-hidden="true" />
+                <span className="topbar-status-text">Connected</span>
+              </div>
+            </>
+          )}
+        </header>
+
+        {/* ── OAuth toast ─────────────────────────────────────────────────── */}
+        {oauthStatus && (
+          <div className="oauth-toast" role="status">{oauthStatus}</div>
         )}
 
-        {/* ── Strategy Room — always mounted once labCtx exists ─────────────── */}
-        {labCtx && (
-          <div style={{ display: activeTab === 'strategy' ? 'block' : 'none' }}>
-            <StrategyRoom
-              cpWatts={labCtx.cpWatts}
-              wPrimeJoules={labCtx.wPrimeJoules}
-              weightKg={labCtx.weightKg}
-              athleteId={labCtx.athleteId}
-              apiKey={labCtx.apiKey}
-              selectedEfforts={labCtx.selectedEfforts}
-              testEnvironment={labCtx.testEnvironment}
-              onRiegelChange={setCalibratedRiegel}
+        {/* ── Content ─────────────────────────────────────────────────────── */}
+        <main className="content" id="main-content">
+
+          {/* The Lab — always mounted so state survives tab switches */}
+          <div style={{ display: activeTab === 'lab' ? 'contents' : 'none' }}>
+            <LabWorkbench
+              onLabUpdate={setLabCtx}
+              user={user}
+              initialAthleteId={savedAthleteId}
+              initialApiKey={savedApiKey}
+              initialAthleteName={savedAthleteName}
+              onSaveToJournal={handleSaveToJournal}
+              onDisconnectIntervals={handleDisconnectIntervals}
             />
           </div>
-        )}
 
-        {/* ── Progress Journal ──────────────────────────────────────────────── */}
-        {activeTab === 'journal' && (
-          user ? (
-            <ProgressJournal user={user} />
-          ) : (
+          {/* Strategy Room gate */}
+          {!labCtx && activeTab === 'strategy' && (
             <div className="card tab-gate">
-              <p>Sign in to view your Progress Journal.</p>
+              <p>Run a Lab session first to unlock the Strategy Room.</p>
+              <button className="btn-primary btn-sm" onClick={() => setActiveTab('lab')}>
+                Go to The Lab
+              </button>
             </div>
-          )
-        )}
+          )}
 
-        {/* ── Individualized Zones — always mounted when labCtx exists ─────── */}
-        {labCtx && (
-          <div style={{ display: activeTab === 'zones' ? 'block' : 'none' }}>
-            <PowerZones labCtx={labCtx} calibratedRiegel={calibratedRiegel} />
-          </div>
-        )}
-        {!labCtx && activeTab === 'zones' && (
-          <div className="card tab-gate">
-            <p>Run a Lab session first to generate individualized power zones.</p>
-            <button className="btn-primary btn-sm" onClick={() => setActiveTab('lab')}>
-              Go to The Lab
+          {/* Strategy Room — always mounted once labCtx exists */}
+          {labCtx && (
+            <div style={{ display: activeTab === 'strategy' ? 'contents' : 'none' }}>
+              <StrategyRoom
+                cpWatts={labCtx.cpWatts}
+                wPrimeJoules={labCtx.wPrimeJoules}
+                weightKg={labCtx.weightKg}
+                athleteId={labCtx.athleteId}
+                apiKey={labCtx.apiKey}
+                selectedEfforts={labCtx.selectedEfforts}
+                testEnvironment={labCtx.testEnvironment}
+                onRiegelChange={setCalibratedRiegel}
+              />
+            </div>
+          )}
+
+          {/* Progress Journal */}
+          {activeTab === 'journal' && (
+            user ? (
+              <ProgressJournal user={user} />
+            ) : (
+              <div className="card tab-gate">
+                <p>Sign in to view your Progress Journal.</p>
+                <button
+                  className="btn-primary btn-sm"
+                  onClick={() => setShowAuthPanel(true)}
+                >
+                  Sign in
+                </button>
+              </div>
+            )
+          )}
+
+          {/* Individualized Zones — always mounted when labCtx exists */}
+          {labCtx && (
+            <div style={{ display: activeTab === 'zones' ? 'contents' : 'none' }}>
+              <PowerZones labCtx={labCtx} calibratedRiegel={calibratedRiegel} />
+            </div>
+          )}
+          {!labCtx && activeTab === 'zones' && (
+            <div className="card tab-gate">
+              <p>Run a Lab session first to generate individualized power zones.</p>
+              <button className="btn-primary btn-sm" onClick={() => setActiveTab('lab')}>
+                Go to The Lab
+              </button>
+            </div>
+          )}
+
+        </main>
+      </div>
+
+      {/* ── Auth overlay ─────────────────────────────────────────────────── */}
+      {showAuthPanel && !user && (
+        <div
+          className="auth-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAuthPanel(false); }}
+        >
+          <div
+            className="auth-overlay-panel"
+            ref={authPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Sign in"
+          >
+            <button
+              className="auth-overlay-close"
+              onClick={() => setShowAuthPanel(false)}
+              aria-label="Close sign in panel"
+              autoFocus
+            >
+              ✕
             </button>
+            <AuthSection
+              user={user}
+              onSignOut={handleSignOut}
+              intervalsConnected={intervalsConnected}
+            />
           </div>
-        )}
+        </div>
+      )}
 
-      </main>
-
-      <footer className="app-footer">
-        <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
-        <span>·</span>
-        <a href="/tos.html" target="_blank" rel="noopener">Terms of Service</a>
-      </footer>
     </div>
+    </>
   );
 }

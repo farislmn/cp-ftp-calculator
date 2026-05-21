@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { ScenarioResult } from '../strategyEngine.js';
-import type { ScenarioLabel } from './StrategyDashboard.js';
+export type ScenarioLabel = 'AGGRESSIVE' | 'BASELINE' | 'CONSERVATIVE';
 import { pushPacingPlan } from '../intervalsWorkout.js';
 import { initiateIntervalsOAuth } from './AuthSection.js';
 
@@ -314,9 +314,9 @@ export function PacingSplitPlan({
   const avgPower = splits.reduce((a, s) => a + s.powerW * s.distM, 0) / distanceMeters;
 
   const scenarioColors: Record<ScenarioLabel, string> = {
-    AGGRESSIVE:   '#dc2626',
-    EXPECTED:     'var(--accent)',
-    CONSERVATIVE: '#16a34a',
+    AGGRESSIVE:   'var(--danger)',
+    BASELINE:     'var(--accent)',
+    CONSERVATIVE: 'var(--success)',
   };
   const accentColor = scenarioColors[scenarioLabel];
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient.js';
 import type { User } from '../supabaseClient.js';
 
@@ -22,7 +22,7 @@ const W = 660, H = 290;
 const PAD = { top: 44, right: 24, bottom: 48, left: 58 };
 const CW = W - PAD.left - PAD.right;
 const CH = H - PAD.top - PAD.bottom;
-const ACCENT = '#2563eb';
+const ACCENT = '#f97316';
 const POINT_R = 6;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -62,6 +62,29 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
   const [hoveredId, setHoveredId]       = useState<string | null>(null);
   const [deleteId, setDeleteId]         = useState<string | null>(null);
   const [deleting, setDeleting]         = useState(false);
+  const deleteModalRef                  = useRef<HTMLDivElement>(null);
+
+  // ── Delete modal focus trap + Escape key ─────────────────────────────────────
+  useEffect(() => {
+    if (!deleteId || !deleteModalRef.current) return;
+    const el = deleteModalRef.current;
+    const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const nodes = el.querySelectorAll<HTMLElement>(FOCUSABLE);
+    const first = nodes[0];
+    const last  = nodes[nodes.length - 1];
+    first?.focus();
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setDeleteId(null); return; }
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last)  { e.preventDefault(); first?.focus(); }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [deleteId]);
 
   // ── Load all entries ────────────────────────────────────────────────────────
   const loadEntries = useCallback(async () => {
@@ -204,7 +227,16 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
       {/* ── Empty state ─────────────────────────────────────────────────────── */}
       {entries.length === 0 ? (
         <div className="card journal-empty-card">
-          <div className="journal-empty-icon">📈</div>
+          <div className="journal-empty-icon">
+            <svg width="48" height="36" viewBox="0 0 48 36" fill="none" aria-hidden="true">
+              <polyline points="2,30 14,20 26,23 38,8 46,12" stroke="#252a38" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+              <circle cx="2"  cy="30" r="2.5" fill="#2e3447" />
+              <circle cx="14" cy="20" r="2.5" fill="#2e3447" />
+              <circle cx="26" cy="23" r="2.5" fill="#2e3447" />
+              <circle cx="38" cy="8"  r="2.5" fill="#f97316" />
+              <circle cx="46" cy="12" r="2.5" fill="#2e3447" />
+            </svg>
+          </div>
           <p>
             Run a Lab session and click <strong>Save to Journal</strong> to begin
             tracking your Critical Power over time.
@@ -232,13 +264,13 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
                     <line
                       x1={PAD.left} y1={chart.yOf(v)}
                       x2={PAD.left + CW} y2={chart.yOf(v)}
-                      stroke="#e2e8f0" strokeWidth={1}
+                      stroke="#252a38" strokeWidth={1}
                     />
                     <text
                       x={PAD.left - 8} y={chart.yOf(v) + 4}
                       textAnchor="end"
                       fontSize={11}
-                      fill="#94a3b8"
+                      fill="#6b7494"
                     >
                       {Math.round(v)}
                     </text>
@@ -250,7 +282,7 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
                   x={14} y={PAD.top + CH / 2}
                   textAnchor="middle"
                   fontSize={11}
-                  fill="#94a3b8"
+                  fill="#6b7494"
                   transform={`rotate(-90, 14, ${PAD.top + CH / 2})`}
                 >
                   CP (W)
@@ -263,7 +295,7 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
                     x={t.x} y={PAD.top + CH + 20}
                     textAnchor="middle"
                     fontSize={11}
-                    fill="#94a3b8"
+                    fill="#6b7494"
                   >
                     {t.label}
                   </text>
@@ -308,7 +340,7 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
                         x={x} y={y - POINT_R - 6}
                         textAnchor="middle"
                         fontSize={10}
-                        fill="#64748b"
+                        fill="#6b7494"
                         fontWeight={hovered ? 700 : 400}
                       >
                         {(e.w_prime_joules / 1000).toFixed(1)} kJ
@@ -322,7 +354,7 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
                       {/* Main dot */}
                       <circle
                         cx={x} cy={y} r={POINT_R}
-                        fill={hovered ? ACCENT : '#fff'}
+                        fill={hovered ? ACCENT : '#1c2030'}
                         stroke={ACCENT}
                         strokeWidth={2}
                       />
@@ -333,12 +365,12 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
                           <rect
                             x={x - 36} y={y + POINT_R + 4}
                             width={72} height={36}
-                            rx={4} fill="#0f172a" fillOpacity={0.88}
+                            rx={4} fill="#1c2030"
                           />
-                          <text x={x} y={y + POINT_R + 17} textAnchor="middle" fontSize={10} fill="#fff" fontWeight={700}>
+                          <text x={x} y={y + POINT_R + 17} textAnchor="middle" fontSize={10} fill="#e8eaf0" fontWeight={700}>
                             CP {Math.round(e.cp_watts)} W
                           </text>
-                          <text x={x} y={y + POINT_R + 30} textAnchor="middle" fontSize={10} fill="#94a3b8">
+                          <text x={x} y={y + POINT_R + 30} textAnchor="middle" fontSize={10} fill="#6b7494">
                             {fmtDate(e.recorded_at)}
                           </text>
                         </g>
@@ -412,8 +444,15 @@ export function ProgressJournal({ user }: ProgressJournalProps) {
       {/* ── Delete confirmation ────────────────────────────────────────────── */}
       {deleteId && (
         <div className="modal-overlay" onClick={() => setDeleteId(null)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3>Delete entry?</h3>
+          <div
+            className="modal-box"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+            ref={deleteModalRef}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 id="delete-modal-title">Delete entry?</h3>
             <p>This cannot be undone.</p>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setDeleteId(null)}>Cancel</button>

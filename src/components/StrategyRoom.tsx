@@ -23,7 +23,7 @@ export interface StrategyRoomProps {
   onRiegelChange?: (riegel: number | null) => void;
 }
 
-type ScenarioLabel = 'Aggressive' | 'Expected' | 'Conservative';
+type ScenarioLabel = 'Aggressive' | 'Baseline' | 'Conservative';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -93,6 +93,15 @@ function daysSince(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
 }
 
+function useDebounced<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState<T>(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
 function fmtRaceTime(s: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -120,7 +129,6 @@ function ScenarioCard({
   scenario,
   weightKg,
   label,
-  subLabel,
   isDefault,
   selected,
   onClick,
@@ -128,13 +136,17 @@ function ScenarioCard({
   scenario: ScenarioResult;
   weightKg: number;
   label: ScenarioLabel;
-  subLabel: string;
   isDefault: boolean;
   selected: boolean;
   onClick: () => void;
 }) {
+  const variantClass =
+    label === 'Aggressive'   ? 'scenario-card-aggressive'   :
+    label === 'Conservative' ? 'scenario-card-conservative' :
+                               'scenario-card-expected';
   const cardClass = [
     'scenario-card',
+    variantClass,
     selected ? 'scenario-card-selected' : '',
   ].filter(Boolean).join(' ');
 
@@ -152,7 +164,6 @@ function ScenarioCard({
         {selected   && <span className="scenario-badge scenario-badge-selected">Selected</span>}
         {!selected && isDefault && <span className="scenario-badge">Your Target</span>}
       </div>
-      <div className="scenario-sublabel">{subLabel}</div>
 
       <div className="scenario-time">{scenario.formattedTime}</div>
       <div className="scenario-time-label">Finish Time</div>
@@ -161,19 +172,16 @@ function ScenarioCard({
         <div className="scenario-stat">
           <span className="scenario-stat-value">{Math.round(scenario.targetPowerWatts)}</span>
           <span className="scenario-stat-unit">W</span>
-          <span className="scenario-stat-label">Target Power</span>
         </div>
         <div className="scenario-stat">
           <span className="scenario-stat-value">
             {(scenario.targetPowerWatts / weightKg).toFixed(2)}
           </span>
           <span className="scenario-stat-unit">W/kg</span>
-          <span className="scenario-stat-label">Power/Weight</span>
         </div>
         <div className="scenario-stat">
           <span className="scenario-stat-value">{scenario.percentCP.toFixed(1)}%</span>
           <span className="scenario-stat-unit">adj CP</span>
-          <span className="scenario-stat-label">% of CP</span>
         </div>
       </div>
     </div>
@@ -202,8 +210,13 @@ export function StrategyRoom({
   const [forecastTempC,       setForecastTempC]       = useState(() => Number(lsGet(LS.tempC, '20')));
   const [forecastHumidityPct, setForecastHumidityPct] = useState(() => Number(lsGet(LS.humidity, '50')));
   const [forecastAltitudeM,   setForecastAltitudeM]   = useState(() => Number(lsGet(LS.altitudeM, '0')));
+  const dElevGain  = useDebounced(elevationGainM,      300);
+  const dElevLoss  = useDebounced(elevationLossM,      300);
+  const dTempC     = useDebounced(forecastTempC,       300);
+  const dHumidity  = useDebounced(forecastHumidityPct, 300);
+  const dAltitudeM = useDebounced(forecastAltitudeM,   300);
   const [showAdvanced,        setShowAdvanced]        = useState(false);
-  const [selectedScenario,    setSelectedScenario]    = useState<ScenarioLabel>('Expected');
+  const [selectedScenario,    setSelectedScenario]    = useState<ScenarioLabel>('Baseline');
   // True when the user has explicitly configured weather (or has stored values from a previous session).
   // Prevents the orchestrator sync from overwriting race-day conditions the user set.
   const userSetWeather = useRef<boolean>(
@@ -392,18 +405,18 @@ export function StrategyRoom({
     if (!effectiveEnv) return null;
 
     const baseRE = strategyData ? pickBaseRE(strategyData.re) : DEFAULT_RE;
-    const { cvi: targetCVI } = calculateCVI(targetDistanceM, elevationGainM, elevationLossM);
+    const { cvi: targetCVI } = calculateCVI(targetDistanceM, dElevGain, dElevLoss);
 
-    const testHumidity = effectiveEnv.humidityPercent ?? forecastHumidityPct;
+    const testHumidity = effectiveEnv.humidityPercent ?? dHumidity;
     const testEnv: EnvironmentConditions = {
       altitudeM:       effectiveEnv.altitudeM,
       temperatureC:    effectiveEnv.temperatureC,
       humidityPercent: testHumidity,
     };
     const targetEnv: EnvironmentConditions = {
-      altitudeM:       forecastAltitudeM,
-      temperatureC:    forecastTempC,
-      humidityPercent: forecastHumidityPct,
+      altitudeM:       dAltitudeM,
+      temperatureC:    dTempC,
+      humidityPercent: dHumidity,
     };
 
     const envAdj = calcEnvAdjustment(testEnv, targetEnv);
@@ -445,8 +458,8 @@ export function StrategyRoom({
     return { output, baseRE, envAdj, adjustedCP: cpWatts * envAdj.factor, aggScenario, expScenario, conScenario };
   }, [
     strategyData, testEnvironment,
-    targetDistanceM, elevationGainM, elevationLossM,
-    forecastAltitudeM, forecastTempC, forecastHumidityPct,
+    targetDistanceM, dElevGain, dElevLoss,
+    dAltitudeM, dTempC, dHumidity,
     cpWatts, wPrimeJoules, weightKg,
     manualRiegel,
   ]);
@@ -490,7 +503,7 @@ export function StrategyRoom({
 
   const scenarioMap: Record<ScenarioLabel, ScenarioResult | undefined> = {
     Aggressive:   calcResult?.aggScenario,
-    Expected:     calcResult?.expScenario,
+    Baseline:     calcResult?.expScenario,
     Conservative: calcResult?.conScenario,
   };
   const activeScenario = scenarioMap[selectedScenario];
@@ -590,18 +603,18 @@ export function StrategyRoom({
 
       {/* ── Riegel Calibration ─────────────────────────────────────────────── */}
       <section className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 className="section-label" style={{ marginBottom: 0 }}>
+        <div className="section-panel-header">
+          <h2 className="section-label" style={{ marginBottom: 0 }} title="The Riegel exponent (r) controls how pace decays with distance. More negative = faster fatigue. Typical range: -0.06 (5K) to -0.14 (ultra). Calibrate from a real race result for best accuracy.">
             Riegel Calibration
             {manualRiegel !== null && (
-              <span style={{ marginLeft: 8, color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 700 }}>
+              <span className="riegel-active-tag">
                 r = {manualRiegel.toFixed(2)}
                 {autoRiegelSource ? ' · auto' : ' · manual'}
               </span>
             )}
           </h2>
           <button
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}
+            className={`btn-ghost btn-sm riegel-toggle${showRiegelCalib ? ' riegel-toggle-open' : ''}`}
             onClick={handleOpenRiegelPanel}
           >
             {showRiegelCalib ? 'Hide ▲' : 'Show ▼'}
@@ -611,20 +624,18 @@ export function StrategyRoom({
         {showRiegelCalib && (
           <div style={{ marginTop: 16 }}>
             {autoRiegelSource ? (
-              <div className="warning-box" style={{ marginBottom: 16 }} role="status">
-                <span className="warning-icon">✓</span>
-                <div className="warning-body">
-                  <p>
-                    <strong>Auto-calibrated</strong> from your {autoRiegelSource.date} race
-                    ({autoRiegelSource.distKm.toFixed(2)} km · {autoRiegelSource.timeStr}).
-                    Select a different race below or pick a Riegel row to override.
-                  </p>
+              <div className="info-banner" role="status">
+                <span className="info-banner-icon">✓</span>
+                <div className="info-banner-body">
+                  <strong>Auto-calibrated</strong> from your {autoRiegelSource.date} race
+                  ({autoRiegelSource.distKm.toFixed(2)} km · {autoRiegelSource.timeStr}).
+                  Select a different race below or pick a Riegel row to override.
                 </div>
               </div>
             ) : (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+              <p className="riegel-calibration-intro">
                 Select a recent race to use as the calibration base, or enter a result manually below.
-                Recency is the primary recommendation factor; distance similarity is secondary.
+                Recency is the primary factor; distance similarity is secondary.
               </p>
             )}
 
@@ -667,23 +678,21 @@ export function StrategyRoom({
                           <td>
                             {race.date}
                             {isRecommended && (
-                              <span style={{ marginLeft: 6, fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700 }}>
-                                ★ Recommended
-                              </span>
+                              <span className="race-recommended-badge">★ Recommended</span>
                             )}
                           </td>
                           <td>{(race.distanceMeters / 1000).toFixed(2)} km</td>
                           <td style={{ fontFamily: 'monospace' }}>{fmtRaceTime(race.movingTimeSeconds)}</td>
-                          <td style={{ fontSize: '0.78rem' }}>
+                          <td>
                             {isRecent
-                              ? <span style={{ color: '#16a34a', fontWeight: 600 }}>{age}d ago</span>
+                              ? <span className="race-age-recent">{age}d ago</span>
                               : isOutdated
-                                ? <span style={{ color: '#dc2626' }} title="Over 90 days old — may not reflect current fitness">{age}d ago ⚠️</span>
-                                : <span style={{ color: 'var(--text-muted)' }}>{age}d ago</span>}
+                                ? <span className="race-age-old" title="Over 90 days old — may not reflect current fitness">{age}d ago ⚠️</span>
+                                : <span className="race-age-mid">{age}d ago</span>}
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <button
-                              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 5, padding: '3px 10px', fontSize: '0.76rem', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}
+                              className="btn-ghost btn-sm"
                               onClick={() => handleSelectRaceForCalib(race)}
                             >
                               Use →
@@ -735,46 +744,65 @@ export function StrategyRoom({
                       </tr>
                     </thead>
                     <tbody>
-                      {riegelTable.map(({ r, t2, typical }) => {
-                        const isSelected = manualRiegel === r;
-                        return (
-                          <tr
-                            key={r}
-                            className={isSelected ? 'row-on' : 'row-off'}
-                            onClick={() => handleSelectRiegelRow(r, isSelected)}
-                            title={isSelected ? 'Click to deselect' : 'Click to use this Riegel'}
-                          >
-                            <td>
-                              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: typical ? 'var(--accent)' : 'var(--text)' }}>
-                                {r.toFixed(2)}
-                              </span>
-                            </td>
-                            <td style={{ fontWeight: isSelected ? 700 : 400 }}>{fmtTime(t2)}</td>
-                            <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                              {typical ? '← typical' : ''}
-                            </td>
-                            <td style={{ textAlign: 'right', fontSize: '0.76rem' }}>
-                              {isSelected
-                                ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>✓ Active</span>
-                                : <span style={{ color: 'var(--text-muted)' }}>Use →</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {(() => {
+                        const sortedR       = [...RIEGEL_EXPONENTS].sort((a, b) => a - b);
+                        const midIdx        = Math.floor((sortedR.length - 1) / 2);
+                        const likelyR       = sortedR[midIdx]!;
+                        const aggressiveR   = sortedR[midIdx + 1]!; // +0.01 from Likely
+                        const conservativeR = sortedR[midIdx - 1]!; // -0.01 from Likely
+                        return riegelTable.map(({ r, t2 }) => {
+                          const isExplicit = manualRiegel === r;
+                          // When no Riegel is set, treat the Likely row as the default active row
+                          const isChecked  = isExplicit || (manualRiegel === null && r === likelyR);
+                          const riegelNote =
+                            r === likelyR       ? 'Likely'       :
+                            r === aggressiveR   ? 'Aggressive'   :
+                            r === conservativeR ? 'Conservative' : 'Less Likely';
+                          const noteColor =
+                            riegelNote === 'Aggressive'   ? 'var(--danger)'     :
+                            riegelNote === 'Conservative' ? 'var(--success)'    :
+                            riegelNote === 'Likely'       ? 'var(--text)'       :
+                                                            'var(--text-muted)';
+                          const noteWeight = riegelNote === 'Less Likely' ? 400 : 600;
+                          return (
+                            <tr
+                              key={r}
+                              className={isChecked ? 'row-on' : 'row-off'}
+                              onClick={() => handleSelectRiegelRow(r, isExplicit)}
+                              title={isExplicit ? 'Click to deselect' : 'Click to use this Riegel'}
+                            >
+                              <td>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: riegelNote === 'Aggressive' ? 'var(--danger)' : riegelNote === 'Conservative' ? 'var(--success)' : riegelNote === 'Likely' ? 'var(--accent)' : 'var(--text)' }}>
+                                  {r.toFixed(2)}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: isChecked ? 700 : 400 }}>{fmtTime(t2)}</td>
+                              <td style={{ fontSize: '0.76rem', color: noteColor, fontWeight: noteWeight }}>
+                                {riegelNote}
+                              </td>
+                              <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  className="effort-check"
+                                  checked={isChecked}
+                                  onChange={() => handleSelectRiegelRow(r, isExplicit)}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
                 {manualRiegel !== null && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                    <button
-                      style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', fontSize: '0.78rem', cursor: 'pointer', color: 'var(--text-muted)' }}
-                      onClick={handleClearRiegel}
-                    >
+                  <div className="riegel-clear-row">
+                    <button className="btn-ghost btn-sm" onClick={handleClearRiegel}>
                       Clear — revert to TTE default
                     </button>
                   </div>
                 )}
-                <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: 8, fontStyle: 'italic' }}>
+                <p className="riegel-hint">
                   Hillier / longer course → more negative. Flat / shorter → less negative.
                 </p>
               </>
@@ -806,14 +834,12 @@ export function StrategyRoom({
       <section className="card prescription-card">
         <div className="prescription-header">
           <h2>Race Prescription</h2>
-          <label className="toggle-label">
-            <input
-              type="checkbox"
-              checked={showAdvanced}
-              onChange={(e) => setShowAdvanced(e.target.checked)}
-            />
-            Show Advanced Strategy Metrics
-          </label>
+          <button
+            className={`btn-ghost btn-sm data-nerd-toggle${showAdvanced ? ' data-nerd-toggle-active' : ''}`}
+            onClick={() => setShowAdvanced(v => !v)}
+          >
+            {showAdvanced ? 'Hide Details' : 'Show Details'}
+          </button>
         </div>
 
         {syncLoading ? (
@@ -833,7 +859,6 @@ export function StrategyRoom({
                 scenario={calcResult.aggScenario}
                 weightKg={weightKg}
                 label="Aggressive"
-                subLabel="Best case"
                 isDefault={false}
                 selected={selectedScenario === 'Aggressive'}
                 onClick={() => setSelectedScenario('Aggressive')}
@@ -841,17 +866,15 @@ export function StrategyRoom({
               <ScenarioCard
                 scenario={calcResult.expScenario}
                 weightKg={weightKg}
-                label="Expected"
-                subLabel="Baseline estimate"
+                label="Baseline"
                 isDefault={true}
-                selected={selectedScenario === 'Expected'}
-                onClick={() => setSelectedScenario('Expected')}
+                selected={selectedScenario === 'Baseline'}
+                onClick={() => setSelectedScenario('Baseline')}
               />
               <ScenarioCard
                 scenario={calcResult.conScenario}
                 weightKg={weightKg}
                 label="Conservative"
-                subLabel="Conservative case"
                 isDefault={false}
                 selected={selectedScenario === 'Conservative'}
                 onClick={() => setSelectedScenario('Conservative')}
@@ -882,7 +905,7 @@ export function StrategyRoom({
           scenario={activeScenario}
           scenarioLabel={
             selectedScenario === 'Aggressive'   ? 'AGGRESSIVE'   :
-            selectedScenario === 'Conservative' ? 'CONSERVATIVE' : 'EXPECTED'
+            selectedScenario === 'Conservative' ? 'CONSERVATIVE' : 'BASELINE'
           }
           distanceMeters={targetDistanceM}
           weightKg={weightKg}
@@ -893,9 +916,11 @@ export function StrategyRoom({
       )}
 
       {/* ── Advanced strategy panel ─────────────────────────────────────────── */}
-      {showAdvanced && calcResult && strategyData && (
-        <section className="card advanced-card">
-          <h3>Strategy Metrics</h3>
+      {showAdvanced && calcResult && (
+        <section className="card advanced-card" style={{ padding: 24 }}>
+
+          <h2 className="pacing-title" style={{ marginBottom: 20 }}>Strategy Metrics</h2>
+
           <div className="strategy-detail-grid">
 
             <div className="detail-section">
@@ -941,42 +966,44 @@ export function StrategyRoom({
               />
             </div>
 
-            <div className="detail-section">
-              <div className="detail-section-title">Running Effectiveness</div>
-              <DetailRow
-                label="Long run RE"
-                value={strategyData.re.longRunRE != null
-                  ? strategyData.re.longRunRE.toFixed(4) : 'N/A'}
-              />
-              <DetailRow
-                label="Interval RE"
-                value={strategyData.re.intervalRE != null
-                  ? strategyData.re.intervalRE.toFixed(4) : 'N/A'}
-              />
-              <DetailRow
-                label="Middle RE (applied)"
-                value={calcResult.baseRE.toFixed(4)}
-                highlight
-              />
-              <DetailRow
-                label="RE source"
-                value={
-                  strategyData.re.longRunRE != null && strategyData.re.intervalRE != null
-                    ? 'avg of long run & interval'
-                    : strategyData.re.intervalRE != null ? 'interval only'
-                    : strategyData.re.longRunRE  != null ? 'long run only'
-                    : 'default (0.96)'
-                }
-              />
-              <DetailRow
-                label="Training terrain CVI"
-                value={strategyData.trainingTerrainCVI.toFixed(1)}
-              />
-            </div>
+            {strategyData && (
+              <div className="detail-section">
+                <div className="detail-section-title">Running Effectiveness</div>
+                <DetailRow
+                  label="Long run RE"
+                  value={strategyData.re.longRunRE != null
+                    ? strategyData.re.longRunRE.toFixed(4) : 'N/A'}
+                />
+                <DetailRow
+                  label="Interval RE"
+                  value={strategyData.re.intervalRE != null
+                    ? strategyData.re.intervalRE.toFixed(4) : 'N/A'}
+                />
+                <DetailRow
+                  label="Middle RE (applied)"
+                  value={calcResult.baseRE.toFixed(4)}
+                  highlight
+                />
+                <DetailRow
+                  label="RE source"
+                  value={
+                    strategyData.re.longRunRE != null && strategyData.re.intervalRE != null
+                      ? 'avg of long run & interval'
+                      : strategyData.re.intervalRE != null ? 'interval only'
+                      : strategyData.re.longRunRE  != null ? 'long run only'
+                      : 'default (0.96)'
+                  }
+                />
+                <DetailRow
+                  label="Training terrain CVI"
+                  value={strategyData.trainingTerrainCVI.toFixed(1)}
+                />
+              </div>
+            )}
 
           </div>
 
-          {strategyData.warnings.length > 0 && (
+          {strategyData && strategyData.warnings.length > 0 && (
             <div className="warning-box" role="status" style={{ marginTop: 14 }}>
               <span className="warning-icon">ℹ️</span>
               <div className="warning-body">

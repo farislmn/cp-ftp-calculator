@@ -60,10 +60,17 @@ const POWER_METERS: PowerMeter[] = [
 ];
 
 const RATING_COLOR: Record<string, string> = {
-  Low:    '#ef4444',
-  Medium: '#22c55e',
-  High:   '#8b5cf6',
-  'N/A':  '#94a3b8',
+  Low:    'var(--danger)',
+  Medium: 'var(--success)',
+  High:   'var(--success)',
+  'N/A':  'var(--text-muted)',
+};
+
+const RATING_BG: Record<string, string> = {
+  Low:    'var(--danger-bg)',
+  Medium: 'var(--success-bg)',
+  High:   'var(--success-bg)',
+  'N/A':  'rgba(107,116,148,0.12)',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -182,8 +189,8 @@ function PowerDurationCurve({
           const y = yOf(yVal);
           return (
             <g key={yVal}>
-              <line x1={padL} y1={y} x2={padL + cW} y2={y} stroke="#e2e8f0" strokeWidth="1" />
-              <text x={padL - 6} y={y + 4} textAnchor="end" fontSize="10" fill="#94a3b8">{yVal}</text>
+              <line x1={padL} y1={y} x2={padL + cW} y2={y} stroke="#252a38" strokeWidth="1" />
+              <text x={padL - 6} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7494">{yVal}</text>
             </g>
           );
         })}
@@ -191,25 +198,25 @@ function PowerDurationCurve({
         {/* CP asymptote */}
         <line
           x1={padL} y1={yOf(cpWatts)} x2={padL + cW} y2={yOf(cpWatts)}
-          stroke="#cbd5e1" strokeWidth="1" strokeDasharray="5,4"
+          stroke="#2e3447" strokeWidth="1" strokeDasharray="5,4"
         />
-        <text x={padL + cW + 4} y={yOf(cpWatts) + 4} fontSize="9" fill="#94a3b8" textAnchor="start">CP</text>
+        <text x={padL + cW + 4} y={yOf(cpWatts) + 4} fontSize="9" fill="#6b7494" textAnchor="start">CP</text>
 
         {/* Axes */}
-        <line x1={padL} y1={padT} x2={padL} y2={axisY} stroke="#cbd5e1" strokeWidth="1" />
-        <line x1={padL} y1={axisY} x2={padL + cW} y2={axisY} stroke="#cbd5e1" strokeWidth="1" />
+        <line x1={padL} y1={padT} x2={padL} y2={axisY} stroke="#2e3447" strokeWidth="1" />
+        <line x1={padL} y1={axisY} x2={padL + cW} y2={axisY} stroke="#2e3447" strokeWidth="1" />
 
         {/* Curve */}
-        <polyline points={curvePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinejoin="round" />
+        <polyline points={curvePath} fill="none" stroke="#f97316" strokeWidth="2.5" strokeLinejoin="round" />
 
         {/* Landmark markers — dot on curve + tick + duration label + predicted watts (if no effort nearby) */}
         {landmarkPts.map(({ t, label, x, y, watts, showWatts }) => (
           <g key={t}>
-            <circle cx={x} cy={y} r="3" fill="#3b82f6" />
-            <line x1={x} y1={axisY} x2={x} y2={axisY + 5} stroke="#94a3b8" strokeWidth="1" />
-            <text x={x} y={axisY + 16} textAnchor="middle" fontSize="10" fill="#64748b">{label}</text>
+            <circle cx={x} cy={y} r="3" fill="#f97316" />
+            <line x1={x} y1={axisY} x2={x} y2={axisY + 5} stroke="#6b7494" strokeWidth="1" />
+            <text x={x} y={axisY + 16} textAnchor="middle" fontSize="10" fill="#6b7494">{label}</text>
             {showWatts && (
-              <text x={x} y={y - 8} textAnchor="middle" fontSize="10" fontWeight="600" fill="#1e40af">
+              <text x={x} y={y - 8} textAnchor="middle" fontSize="10" fontWeight="600" fill="#e8eaf0">
                 {watts} W
               </text>
             )}
@@ -222,11 +229,11 @@ function PowerDurationCurve({
           const ey = yOf(e.averagePower);
           return (
             <g key={i}>
-              <rect x={ex - 24} y={ey - 25} width={48} height={16} rx="3" fill="#fff" fillOpacity="0.9" />
-              <text x={ex} y={ey - 13} textAnchor="middle" fontSize="11" fontWeight="700" fill="#0f172a">
+              <rect x={ex - 24} y={ey - 25} width={48} height={16} rx="3" fill="#1c2030" />
+              <text x={ex} y={ey - 13} textAnchor="middle" fontSize="11" fontWeight="700" fill="#e8eaf0">
                 {e.averagePower} W
               </text>
-              <circle cx={ex} cy={ey} r="5" fill="#0f172a" stroke="#fff" strokeWidth="1.5" />
+              <circle cx={ex} cy={ey} r="5" fill="#f97316" stroke="#1c2030" strokeWidth="1.5" />
             </g>
           );
         })}
@@ -234,7 +241,7 @@ function PowerDurationCurve({
         {/* Y-axis label */}
         <text
           x={12} y={padT + cH / 2}
-          textAnchor="middle" fontSize="10" fill="#94a3b8"
+          textAnchor="middle" fontSize="10" fill="#6b7494"
           transform={`rotate(-90, 12, ${padT + cH / 2})`}
         >Watts</text>
       </svg>
@@ -485,6 +492,13 @@ export function LabWorkbench({
   return (
     <div className="workbench">
 
+      {/* ── Screen-reader live region: announces CP results as they update ───────── */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {cpResult
+          ? `Critical Power: ${Math.round(cpResult.criticalPowerWatts)} watts. W prime: ${cpResult.wPrimeKJ.toFixed(2)} kilojoules. R squared fit: ${cpResult.r2.toFixed(4)}.`
+          : ''}
+      </div>
+
       {/* ── Last-saved banner ──────────────────────────────────────────────────── */}
       {lastSaved && !showResults && (
         <div className="last-saved-banner">
@@ -503,7 +517,7 @@ export function LabWorkbench({
           {apiKey.startsWith('Bearer ') && !showManualEntry ? (
             <div className="field field-full">
               <div className="intervals-oauth-connected">
-                <span style={{ fontSize: '0.85rem', color: '#c0390a', fontWeight: 500, flex: 1 }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 500, flex: 1 }}>
                   Connected as <strong>{athleteName || athleteId}</strong>
                 </span>
                 <button className="btn-ghost btn-sm" onClick={() => setShowManualEntry(true)}>
@@ -635,7 +649,7 @@ export function LabWorkbench({
               <span className="manual-col-label">Power (W)</span>
             </div>
 
-            {manualPoints.map((pt) => {
+            {manualPoints.map((pt, i) => {
               const parsedDur = parseManualDuration(pt.durationInput);
               const parsedPwr = Number(pt.powerInput);
               const valid = parsedDur != null && parsedDur > 0 && parsedPwr > 0;
@@ -646,6 +660,7 @@ export function LabWorkbench({
                     className={`manual-input${pt.durationInput && !valid ? ' manual-input-warn' : ''}`}
                     placeholder="e.g. 3:00"
                     value={pt.durationInput}
+                    aria-label={`Effort ${i + 1} duration (mm:ss)`}
                     onChange={(e) => updateManualPoint(pt.id, 'durationInput', e.target.value)}
                   />
                   <input
@@ -655,6 +670,7 @@ export function LabWorkbench({
                     value={pt.powerInput}
                     min={1}
                     max={2000}
+                    aria-label={`Effort ${i + 1} average power (watts)`}
                     onChange={(e) => updateManualPoint(pt.id, 'powerInput', e.target.value)}
                   />
                   {manualPoints.length > 2 && (
@@ -727,45 +743,58 @@ export function LabWorkbench({
           <section className="card prescription-card">
             <div className="prescription-header">
               <h2>Your Running Prescription</h2>
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={showAdvanced}
-                  onChange={(e) => setShowAdvanced(e.target.checked)}
-                />
-                Show Advanced / Edit Data
-              </label>
+              <button
+                className={`btn-ghost btn-sm data-nerd-toggle${showAdvanced ? ' data-nerd-toggle-active' : ''}`}
+                onClick={() => setShowAdvanced(v => !v)}
+              >
+                {showAdvanced ? 'Hide detail' : 'Show detail'}
+              </button>
             </div>
 
             {cpResult ? (
               <>
-                <div className="metrics-grid">
-                  <div className="metric metric-primary">
-                    <span className="metric-value">{Math.round(cpResult.criticalPowerWatts)}</span>
-                    <span className="metric-unit">W</span>
-                    <span className="metric-label">Critical Power</span>
+                <div className="metric-hero">
+                  <div className="metric-hero-cell">
+                    <div className="metric-hero-value">
+                      {Math.round(cpResult.criticalPowerWatts)}
+                      <span className="metric-hero-unit">W</span>
+                    </div>
+                    <div className="metric-hero-label">Critical Power</div>
                   </div>
-
-                  <div className="metric">
-                    <span className="metric-value">{cpResult.wPrimeKJ.toFixed(2)}</span>
-                    <span className="metric-unit">kJ</span>
-                    <span className="metric-label">W′ Anaerobic Capacity</span>
+                  <div className="metric-hero-cell">
+                    <div className="metric-hero-value metric-hero-value-accent">
+                      {cpResult.wPrimeKJ.toFixed(2)}
+                      <span className="metric-hero-unit">kJ</span>
+                    </div>
+                    <div className="metric-hero-label">
+                      W′ Anaerobic Capacity
+                      <span
+                        className="metric-hero-badge"
+                        style={{ background: RATING_BG[cpResult.wPrimeRating], color: RATING_COLOR[cpResult.wPrimeRating] }}
+                      >
+                        {cpResult.wPrimeRating}
+                      </span>
+                    </div>
                   </div>
+                </div>
 
-                  <div className="metric">
-                    <span className="metric-value">{cpResult.wPrimePerKg.toFixed(1)}</span>
-                    <span className="metric-unit">J/kg</span>
-                    <span className="metric-label">W′ per kg</span>
+                <div className="metric-stats-row">
+                  <div
+                    className="metric-stat"
+                    title="W prime per kilogram of body weight. Higher values indicate greater anaerobic capacity relative to body size. Stryd-calibrated: Low < threshold, Medium/High = within expected range."
+                  >
+                    <span className="metric-stat-value">{cpResult.wPrimePerKg.toFixed(1)}</span>
+                    <span className="metric-stat-unit">J/kg</span>
+                    <div className="metric-stat-label">W′ per kg</div>
                   </div>
-
-                  <div className="metric">
-                    <span
-                      className="metric-value metric-rating"
-                      style={{ color: RATING_COLOR[cpResult.wPrimeRating] }}
-                    >
-                      {cpResult.wPrimeRating}
+                  <div
+                    className="metric-stat"
+                    title="R-squared measures how well your effort data fits the CP model. R2 >= 0.95 = high confidence. R2 < 0.95 = low confidence — consider adjusting which efforts are selected."
+                  >
+                    <span className={`metric-stat-value ${cpResult.r2 < 0.95 ? 'r2-low' : 'r2-ok'}`}>
+                      {cpResult.r2.toFixed(4)}
                     </span>
-                    <span className="metric-label">W′ Rating</span>
+                    <div className="metric-stat-label">R² Fit</div>
                   </div>
                 </div>
 
@@ -818,120 +847,75 @@ export function LabWorkbench({
             )}
           </section>
 
+          {/* ── Advanced / Data Workbench ──────────────────────────────────────── */}
+          {showAdvanced && cpDataSource === 'intervals' && (
+            <section className="card advanced-card">
+              <div className="wb-two-col">
+                <div className="wb-stats-panel">
+                  <h3>Result</h3>
+                  {cpResult ? (
+                    <>
+                      <div className="wb-stat-item">
+                        <span className="wb-stat-key">Critical Power</span>
+                        <span className="wb-stat-val">{Math.round(cpResult.criticalPowerWatts)} W</span>
+                      </div>
+                      <div className="wb-stat-item">
+                        <span className="wb-stat-key">W′</span>
+                        <span className="wb-stat-val accent">{cpResult.wPrimeKJ.toFixed(2)} kJ</span>
+                      </div>
+                      <div className="wb-stat-item">
+                        <span className="wb-stat-key">R² Fit</span>
+                        <span className={`wb-stat-val ${cpResult.r2 < 0.95 ? 'r2-low' : ''}`} style={{ fontSize: 15 }}>{cpResult.r2.toFixed(4)}</span>
+                      </div>
+                    </>
+                  ) : <p className="msg-muted">{cpError}</p>}
+                </div>
+                <div data-impeccable-variants="e0fc90d9" data-impeccable-variant-count="3" style={{ display: "contents" }}>
+                  {/* impeccable-variants-start e0fc90d9 */}
+                  {/* Original */}
+                  <div data-impeccable-variant="original">
+                    <div className="wb-table-panel">
+                      {cpDataSource === 'intervals' && (
+                        <>
+                          <p className="advanced-hint">Click rows to toggle efforts.</p>
+                          <table className="effort-table">
+                            <thead><tr><th>Duration</th><th>Power</th><th>Date</th><th>Use</th></tr></thead>
+                            <tbody>
+                              {allEfforts.map((effort) => {
+                                const key = effortKey(effort);
+                                const checked = selectedKeys.has(key);
+                                return (
+                                  <tr key={key} className={checked ? 'row-on' : 'row-off'} onClick={() => toggleEffort(key)}>
+                                    <td>{fmtDuration(effort.durationSeconds)}</td>
+                                    <td><strong>{effort.averagePower} W</strong></td>
+                                    <td>{fmtDate(effort.date)}</td>
+                                    <td onClick={(e) => e.stopPropagation()}>
+                                      <input type="checkbox" checked={checked} onChange={() => toggleEffort(key)} className="effort-check" />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {/* Variants: insert below this line */}
+                  {/* impeccable-variants-end e0fc90d9 */}
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* ── Power-Duration Curve ─────────────────────────────────────────────── */}
-          {cpResult && (
+          {cpResult && showAdvanced && (
             <section className="card pd-curve-card">
               <PowerDurationCurve
                 cpWatts={cpResult.criticalPowerWatts}
                 wPrimeJoules={cpResult.wPrimeJoules}
                 effortPoints={curveEffortPoints}
               />
-            </section>
-          )}
-
-          {/* ── Advanced / Data Workbench ──────────────────────────────────────── */}
-          {showAdvanced && (
-            <section className="card advanced-card">
-              <h3>Data Workbench</h3>
-
-              {/* Intervals mode: effort table */}
-              {cpDataSource === 'intervals' && (
-                <>
-                  <p className="advanced-hint">
-                    Check or uncheck efforts to include them in the calculation. Results update live.
-                  </p>
-                  <div className="table-wrapper">
-                    <table className="effort-table">
-                      <thead>
-                        <tr>
-                          <th>Duration</th>
-                          <th>Power</th>
-                          <th>Date</th>
-                          <th>Recent?</th>
-                          <th>Use</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allEfforts.map((effort) => {
-                          const key     = effortKey(effort);
-                          const checked = selectedKeys.has(key);
-                          return (
-                            <tr
-                              key={key}
-                              className={checked ? 'row-on' : 'row-off'}
-                              onClick={() => toggleEffort(key)}
-                            >
-                              <td>{fmtDuration(effort.durationSeconds)}</td>
-                              <td><strong>{effort.averagePower} W</strong></td>
-                              <td>{fmtDate(effort.date)}</td>
-                              <td>
-                                {effort.isRecent
-                                  ? <span className="dot-recent" title="Within 42 days">●</span>
-                                  : <span className="dot-older"  title="Older than 42 days">○</span>}
-                              </td>
-                              <td onClick={(e) => e.stopPropagation()}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => toggleEffort(key)}
-                                  className="effort-check"
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-
-              {/* Manual mode: summary of entered points */}
-              {cpDataSource === 'manual' && (
-                <p className="advanced-hint">
-                  Edit your effort data points in the config card above. The curve and calculation update live.
-                </p>
-              )}
-
-              {/* Live result bar */}
-              <div className="live-bar">
-                {cpResult ? (
-                  <div className="live-stats">
-                    <span>CP <strong>{Math.round(cpResult.criticalPowerWatts)} W</strong></span>
-                    <span>W′ <strong>{cpResult.wPrimeKJ.toFixed(2)} kJ</strong></span>
-                    <span>
-                      R² <strong className={cpResult.r2 < 0.95 ? 'r2-low' : 'r2-ok'}>
-                        {cpResult.r2.toFixed(4)}
-                      </strong>
-                    </span>
-                  </div>
-                ) : (
-                  <p className="msg-muted">{cpError}</p>
-                )}
-              </div>
-
-              {/* ── Low-confidence warning ────────────────────────────────────── */}
-              {cpResult?.warning && (
-                <div className="warning-box" role="alert">
-                  <span className="warning-icon">⚠️</span>
-                  <div className="warning-body">
-                    <strong>Low Confidence — R² {cpResult.r2.toFixed(4)}</strong>
-                    <p>{cpResult.warning.message}</p>
-                    {cpResult.warning.suggestedCorrection.length > 0 && (
-                      <p className="warning-suggestion">
-                        Biggest {cpResult.warning.suggestedCorrection.length === 1 ? 'outlier' : 'outliers'}:{' '}
-                        {cpResult.warning.suggestedCorrection.slice(0, 3).map((o, i) => (
-                          <React.Fragment key={o.index}>
-                            {i > 0 && ', '}
-                            <strong>{fmtDuration(o.effort.durationSeconds)}</strong>
-                            {' '}({o.residualPercent.toFixed(1)}% off)
-                          </React.Fragment>
-                        ))}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
             </section>
           )}
         </>

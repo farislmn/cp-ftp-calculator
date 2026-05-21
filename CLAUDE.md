@@ -29,27 +29,17 @@ Current release: **v0.3.1** (2026-05-17)
 
 ---
 
-## Next Immediate Goals (v0.4 roadmap)
+## Roadmap
 
-### 1 — Critical Pace mode
+See `CHANGELOG.md` `[Unreleased]` section for the full backlog.
 
-A pace-based parallel to the CP/W′ model for runners without a power meter or who prefer pace-based targets.
+### Immediate TODOs (next session)
 
-**Math model:** Same OLS regression as `labEngine.ts` but units change:
-- Inputs: effort duration (s) + average pace (min/km or min/mile), converted to average speed (m/s)
-- Regression: `Distance = CS × Duration + D′` → slope = Critical Speed (m/s), intercept = D′ (m)
-- Above-CP equivalent: `D_remaining = D′ − (actual_speed − CS) × elapsed_time`
-
-**Scope:**
-- The Lab: "Pace" mode pill alongside "Power". Manual entry accepts pace + distance or duration. No Intervals.icu fetch path for pace (manual only for now).
-- Strategy Room: when pace mode is active, scenario outputs show min/km pace instead of watts; `targetPowerWatts` field replaced by `targetPaceSecPerKm`.
-- Pacing Plan: splits shown as min/km targets instead of watts.
-
-**Toggle:** A top-level `mode: 'power' | 'pace'` state in `App.tsx`, passed as prop; Strategy Room and Pacing Plan adapt their display accordingly. Persists to localStorage (`ppe_mode`).
-
-### 2 — Strategy Room debounce (minor)
-
-- `useEffect` in `StrategyRoom.tsx` re-syncs the orchestrator on every `targetDistanceM` change. Cache mitigates impact but debouncing (~400 ms) would be cleaner.
+1. **Resolve live variant wrapper** — `StrategyRoom.tsx` has a `data-impeccable-variants="88abf542"` scaffold around `strategy-detail-grid`. Accept one of the 4 polish variants (or discard all) and run `live-complete.mjs --id 88abf542` before the next commit.
+2. **Fix "Strategy Metrics" h3** — heading does not visually align with other `.detail-section-title` / card headings inside `.advanced-card`. Previous attempt discarded. Needs a fresh `/impeccable live` pass.
+3. **Strategy Room debounce** — numeric inputs (gain, loss, temp, humidity, altitude) recalculate on every keystroke. Add ~300 ms debounce.
+4. **Mockup v2 brainstorm** — explore layout / chart / zone-table presentation alternatives before the next feature sprint.
+5. **Critical Pace mode** — pace-based CP model for powerless runners (see CHANGELOG for full spec).
 
 ---
 
@@ -58,25 +48,11 @@ A pace-based parallel to the CP/W′ model for runners without a power meter or 
 | Module | Status |
 |---|---|
 | `labEngine.ts` — CP/W′ regression | ✅ **LOCKED** — parity-verified (3-pt: CP 194.9 W, W′ 7.65 kJ, R² 0.9998; 4-pt: CP 189.5 W, W′ 10.22 kJ, R² 0.9989) |
-| `envAdjustment.ts` — environmental factor | ✅ parity-verified (98.23 %, 100.56 %) |
-| `strategyEngine.ts` — Riegel/RE race scenarios | ✅ parity-verified (53 kg / CP 191 W / TTE 3000 s / env 98.23 % / 42 400 m — ΔW ≤ 0.04 W, ΔT ≤ 1 s) |
-| `intervalsClient.ts` — MMP extraction from streams | ✅ live-tested (13 MMP efforts, values match spreadsheet) |
-| `effortSelector.ts` — Goldilocks effort picker | ✅ complete |
-| `cache.ts` — localStorage TTL cache | ✅ live — MMP 1 h, race list 24 h, orchestrator 4 h |
-| `riegelLookup.ts` — Riegel exponent lookup table | ✅ live — auto-calibrates from nearest past race on Strategy Room mount |
-| `dataOrchestrator.ts` — Pillar 4 context sync | ✅ live-tested. Extracts environment, training terrain CVI (3 longest runs last 6 weeks), and RE. `fetchRecentRaces()` caches 24 h. |
-| `supabaseClient.ts` — Supabase singleton | ✅ live — reads `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` env vars |
-| `components/AuthSection.tsx` — auth UI | ✅ live — Intervals.icu OAuth + Google OAuth + email/password. OAuth scope: `ACTIVITY:WRITE,CALENDAR:WRITE` (comma unencoded — intervals.icu separator). |
-| `components/LabWorkbench.tsx` — Pillar 1 UI | ✅ live — weight/sex/powerMeter persist to localStorage. MMP cache auto-restores on refresh (1 h TTL). "Last saved" banner shows most-recent journal CP. Disconnect clears MMP cache. |
-| `components/StrategyRoom.tsx` — Pillar 2 UI | ✅ live — all 7 race inputs persist to localStorage. Orchestrator result cached 4 h. Race list cached 24 h. Riegel auto-calibrated from nearest past race on mount. Scenario cards use diagonal-switching. Exposes `onRiegelChange` prop — fires whenever `manualRiegel` changes so `App.tsx` can forward it to PowerZones. |
-| `intervalsWorkout.ts` — push pacing plan to Intervals.icu | ✅ live — uses `buildAuthHeader` (supports both OAuth Bearer and manual Basic API key). POSTs to `/api/v1/athlete/{id}/events`. |
-| `components/PacingSplitPlan.tsx` — Pacing sub-component | ✅ live — splitEveryKm/splitType/deviationPct/raceDate persist to localStorage. CALENDAR:WRITE error shows inline reconnect button. `npm run test:pacing` passes (Δ = 0.000 s) |
-| `components/ProgressJournal.tsx` — Pillar 3 UI | ✅ live — SVG line chart of CP over time, W′ annotation at each node, 3/6-month window toggle, prev/next page navigation, full entry list with delete confirmation |
-| `powerZoneEngine.ts` — individualized zone calculator | ✅ live — Palladino 7-zone system + SS. Z3 boundary = `clamp(102% − k×0.077%, 95%, 99%)`. Z2 upper = marathon power via calibrated Riegel (personal from Strategy Room, or −0.10 default). Above-CP intervals via `P = CP + X × (W′/t)`. Sub-threshold bands from Palladino Levels Grid. |
-| `components/PowerZones.tsx` — Individualized Zones UI | ✅ live — 4th tab. Zone table (Z1–Z7 + SS after Z7), above-CP interval targets (5 zones), sub-threshold bands. Header shows active Riegel (`r = X.XX ✓` personal or `(default)`). "Copy for Intervals.icu" button. |
-| `components/StrategyDashboard.tsx` | ⚠️ **Dead code** — `App.tsx` mounts `StrategyRoom`; this file is never rendered. Safe to delete unless a redesign resurrects it. |
+| `strategyEngine.ts` — Riegel/RE race scenarios | ✅ **LOCKED** — parity-verified (53 kg / CP 191 W / TTE 3000 s / env 98.23 % / 42 400 m — ΔW ≤ 0.04 W, ΔT ≤ 1 s) |
 
-**Do not modify `labEngine.ts` regression logic without a full parity re-check against the `v4 Calcs` spreadsheet.**
+All other modules are live and complete. See module reference below for details.
+
+**Do not modify `labEngine.ts` or `strategyEngine.ts` regression logic without a full parity re-check.** Run `npm test` (Lab) and `npm run test:strategy` (Strategy Room) after any changes to these files.
 
 ---
 
@@ -211,7 +187,6 @@ src/
     PacingSplitPlan.tsx          # Pacing sub-component — split table + SVG power chart + push to Intervals.icu
     ProgressJournal.tsx          # Pillar 3 UI — SVG CP-over-time chart + entry list + delete
     PowerZones.tsx               # Individualized Zones tab — zone table, interval targets, sub-threshold bands
-    StrategyDashboard.tsx        # ⚠️ Alternate Pillar 2 UI — not mounted, keep or delete
 ```
 
 ---
@@ -333,9 +308,6 @@ Fetches the activity detail for the CP test efforts and returns `EnvironmentCont
 
 **`extractTrainingTerrainCVI(athleteId, headers)`** *(internal)*
 Returns average CVI from the 3 longest non-race runs in the last **6 weeks** (42 days). Uses `total_elevation_gain` as both climb and descent (symmetric assumption). Returns 0 with a warning when no qualifying runs exist.
-
-**`extractPriorRaceAnchor(athleteId, apiKey, targetRaceDistanceMeters?)`** *(exported, dead code — safe to delete)*
-No longer called by `syncStrategyData` or any other file. The Riegel panel uses `fetchRecentRaces` instead.
 
 **`extractRunningEffectiveness(athleteId, apiKey, targetDistanceM, cpWatts, weightKg)`**
 Returns `REResult { longRunRE, intervalRE }`. Throws (strict error) if `targetDistanceM` is null.

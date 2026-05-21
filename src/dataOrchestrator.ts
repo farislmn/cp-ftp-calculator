@@ -64,13 +64,6 @@ export interface EnvironmentContext {
   humidityPercent: number | null;
 }
 
-export interface PriorRaceAnchor {
-  distanceMeters: number;
-  movingTimeSeconds: number;
-  averagePowerWatts: number | null;
-  elevationGainMeters: number | null;
-}
-
 export interface RaceRecord {
   id: string | number;
   /** ISO date (YYYY-MM-DD) */
@@ -293,70 +286,6 @@ export async function extractEnvironmentContext(
   }
 
   return { context: { altitudeM, temperatureC, humidityPercent }, warnings };
-}
-
-// ─── Task 2: Prior Race Anchor ────────────────────────────────────────────────
-
-/**
- * Finds the race in the last 6 months (race === true) whose distance is
- * closest to targetRaceDistanceMeters.  Falls back to longest race when
- * targetRaceDistanceMeters is null.
- * Returns null without throwing when no races exist.
- */
-export async function extractPriorRaceAnchor(
-  athleteId: string,
-  apiKey: string,
-  targetRaceDistanceMeters?: number | null,
-): Promise<{ anchor: PriorRaceAnchor | null; warnings: string[] }> {
-  const headers = makeHeaders(apiKey);
-  const warnings: string[] = [];
-
-  let activities: ActivitySummary[];
-  try {
-    activities = await fetchActivityList(athleteId, headers, daysAgo(180), new Date());
-  } catch (err) {
-    return {
-      anchor: null,
-      warnings: [`Prior race fetch failed: ${(err as Error).message}`],
-    };
-  }
-
-  const races = activities.filter(
-    (a) =>
-      (a.type === 'Run' || a.type === 'VirtualRun') &&
-      a.race === true &&
-      typeof a.distance === 'number' &&
-      a.distance > 0 &&
-      typeof a.moving_time === 'number' &&
-      a.moving_time > 0,
-  );
-
-  if (races.length === 0) {
-    warnings.push(
-      'No races found in the last 6 months (race === true, Run). ' +
-        'Riegel will use the TTE anchor.',
-    );
-    return { anchor: null, warnings };
-  }
-
-  const best = targetRaceDistanceMeters != null
-    ? races.reduce((prev, cur) =>
-        Math.abs((cur.distance ?? 0) - targetRaceDistanceMeters) <
-        Math.abs((prev.distance ?? 0) - targetRaceDistanceMeters) ? cur : prev,
-      )
-    : races.reduce((prev, cur) =>
-        (cur.distance ?? 0) > (prev.distance ?? 0) ? cur : prev,
-      );
-
-  return {
-    anchor: {
-      distanceMeters: best.distance!,
-      movingTimeSeconds: best.moving_time!,
-      averagePowerWatts: best.icu_average_watts ?? null,
-      elevationGainMeters: best.total_elevation_gain ?? null,
-    },
-    warnings,
-  };
 }
 
 // ─── Task 2b: Recent Race List ────────────────────────────────────────────────
