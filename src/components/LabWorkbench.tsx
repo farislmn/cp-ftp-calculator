@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { calculateCP } from '../labEngine.js';
+import { calculateCP, MIN_DURATION_S, MAX_DURATION_S, DURATION_TOLERANCE_S } from '../labEngine.js';
 import type { Sex, PowerMeter, CPResult, EnvironmentConditions } from '../labEngine.js';
 import { fetchMaxEfforts } from '../intervalsClient.js';
 import type { MaxEffort } from '../intervalsClient.js';
-import { autoSelectGoldilocksEfforts, effortKey } from '../effortSelector.js';
+import { autoSelectGoldilocksEfforts, effortKey, CP_PROTOCOLS, DEFAULT_CP_PROTOCOL, getCPProtocol } from '../effortSelector.js';
+import type { CPProtocolId } from '../effortSelector.js';
 import type { User } from '../supabaseClient.js';
 import { initiateIntervalsOAuth } from './AuthSection.js';
 import { getCached, clearCached } from '../cache.js';
@@ -27,6 +28,7 @@ const LS_LAST_SAVED     = 'ppe_lab_last_saved';
 const LS_CP_SOURCE      = 'ppe_lab_cp_source';
 const LS_MANUAL_POINTS  = 'ppe_lab_manual_points';
 const LS_MANUAL_ENV     = 'ppe_lab_manual_env';
+const LS_PROTOCOL       = 'ppe_lab_protocol';
 
 const lsSelKeys = (id: string) => `ppe_lab_sel_${id}`;
 
@@ -292,6 +294,9 @@ export function LabWorkbench({
     () => lsGet(LS_CP_SOURCE, 'intervals') as 'intervals' | 'manual'
   );
   const [manualSubmitted, setManualSubmitted] = useState(false);
+  const [cpProtocol, setCpProtocol] = useState<CPProtocolId>(
+    () => getCPProtocol(lsGet(LS_PROTOCOL, DEFAULT_CP_PROTOCOL)).id
+  );
 
   // ── Manual entry state ────────────────────────────────────────────────────────
   const [manualPoints, setManualPoints] = useState<ManualPoint[]>(() => {
@@ -359,11 +364,19 @@ export function LabWorkbench({
       return;
     }
 
-    const autoSelected = autoSelectGoldilocksEfforts(result.efforts);
+    const autoSelected = autoSelectGoldilocksEfforts(result.efforts, cpProtocol);
     setAllEfforts(result.efforts);
     setSelectedKeys(new Set(autoSelected.map(effortKey)));
     setHasData(true);
-  }, [athleteId, apiKey]);
+  }, [athleteId, apiKey, cpProtocol]);
+
+  // ── Protocol change — re-run the auto-pick on already-fetched efforts ─────────
+  const handleProtocolChange = useCallback((id: CPProtocolId) => {
+    setCpProtocol(id);
+    if (allEfforts.length > 0) {
+      setSelectedKeys(new Set(autoSelectGoldilocksEfforts(allEfforts, id).map(effortKey)));
+    }
+  }, [allEfforts]);
 
   // ── Checkbox toggle ───────────────────────────────────────────────────────────
   const toggleEffort = useCallback((key: string) => {
@@ -424,6 +437,7 @@ export function LabWorkbench({
   useEffect(() => { try { localStorage.setItem(LS_SEX,       sex);              } catch {} }, [sex]);
   useEffect(() => { try { localStorage.setItem(LS_METER,     powerMeter);       } catch {} }, [powerMeter]);
   useEffect(() => { try { localStorage.setItem(LS_CP_SOURCE, cpDataSource);     } catch {} }, [cpDataSource]);
+  useEffect(() => { try { localStorage.setItem(LS_PROTOCOL,  cpProtocol);       } catch {} }, [cpProtocol]);
   useEffect(() => {
     try { localStorage.setItem(LS_MANUAL_POINTS, JSON.stringify(manualPoints)); } catch {}
   }, [manualPoints]);
@@ -441,7 +455,7 @@ export function LabWorkbench({
   useEffect(() => {
     const id = athleteId.trim();
     if (!id || hasData) return;
-    const cached = getCached<{ efforts: MaxEffort[] }>(`mmp_v1_${id}`);
+    const cached = getCached<{ efforts: MaxEffort[] }>(`mmp_v2_${id}`);
     if (!cached) return;
 
     setAllEfforts(cached.efforts);
@@ -451,11 +465,11 @@ export function LabWorkbench({
       if (raw) {
         setSelectedKeys(new Set(JSON.parse(raw) as string[]));
       } else {
-        const auto = autoSelectGoldilocksEfforts(cached.efforts);
+        const auto = autoSelectGoldilocksEfforts(cached.efforts, cpProtocol);
         setSelectedKeys(new Set(auto.map(effortKey)));
       }
     } catch {
-      const auto = autoSelectGoldilocksEfforts(cached.efforts);
+      const auto = autoSelectGoldilocksEfforts(cached.efforts, cpProtocol);
       setSelectedKeys(new Set(auto.map(effortKey)));
     }
 
@@ -526,7 +540,7 @@ export function LabWorkbench({
                 <button className="btn-ghost btn-sm" onClick={() => {
                   const id = athleteId.trim();
                   if (id) {
-                    clearCached(`mmp_v1_${id}`);
+                    clearCached(`mmp_v2_${id}`);
                     try { localStorage.removeItem(lsSelKeys(id)); } catch {}
                   }
                   setApiKey(''); setAthleteId(''); setAthleteName('');
@@ -630,6 +644,12 @@ export function LabWorkbench({
         {/* ── Intervals mode: fetch button ──────────────────────────────────── */}
         {cpDataSource === 'intervals' && (
           <>
+            <label className="field field-full" style={{ marginBottom: 12 }}>
+              <span>Test Protocol</span>
+              <select value={cpProtocol} onChange={(e) => handleProtocolChange(e.target.value as CPProtocolId)}>
+                {CP_PROTOCOLS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
             <button
               className="btn-primary"
               onClick={handleFetch}
@@ -644,6 +664,9 @@ export function LabWorkbench({
         {/* ── Manual mode: effort entry + test conditions ───────────────────── */}
         {cpDataSource === 'manual' && (
           <div className="manual-entry">
+            <p className="manual-env-hint">
+              Efforts between {fmtDuration(MIN_DURATION_S)} and {fmtDuration(MAX_DURATION_S)} (±{DURATION_TOLERANCE_S} s) — e.g. 2, 3, 9, 12 or 20 min tests.
+            </p>
             <div className="manual-entry-header">
               <span className="manual-col-label">Duration (mm:ss)</span>
               <span className="manual-col-label">Power (W)</span>
@@ -652,7 +675,7 @@ export function LabWorkbench({
             {manualPoints.map((pt, i) => {
               const parsedDur = parseManualDuration(pt.durationInput);
               const parsedPwr = Number(pt.powerInput);
-              const valid = parsedDur != null && parsedDur > 0 && parsedPwr > 0;
+              const valid = parsedDur != null && parsedDur >= MIN_DURATION_S - DURATION_TOLERANCE_S && parsedDur <= MAX_DURATION_S + DURATION_TOLERANCE_S && parsedPwr > 0;
               return (
                 <div key={pt.id} className="manual-row">
                   <input
@@ -800,7 +823,7 @@ export function LabWorkbench({
 
                 {!showAdvanced && cpDataSource === 'intervals' && (
                   <p className="prescription-footnote">
-                    Calculated using your best 3-min and 12-min efforts from the last 90 days.
+                    Calculated using your best {getCPProtocol(cpProtocol).durationsText} efforts from the last 90 days ({getCPProtocol(cpProtocol).label} protocol).
                   </p>
                 )}
                 {!showAdvanced && cpDataSource === 'manual' && (

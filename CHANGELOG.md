@@ -23,6 +23,18 @@ Changes made during `/impeccable live` sessions. Not yet committed.
 - **`strategy-detail-grid` polish** (`StrategyRoom.tsx`) — 4 CSS variants generated for session `88abf542` (V1: stronger type contrast / no row dividers; V2: unified surface with column dividers; V3: accent-background callout rows; V4: monospace values). Variant wrapper still present in source — needs accept or discard before commit.
 - **"Strategy Metrics" h3 alignment** (`StrategyRoom.tsx`) — heading sits visually lower than other section headings inside `.advanced-card`. Previous variant attempt discarded; needs another pass.
 
+### Added
+
+- **2-, 9- and 20-min CP efforts** (`labEngine.ts`, `intervalsClient.ts`, `LabWorkbench.tsx`) — the CP regression now accepts efforts from 120 s (was 180 s) up to 2400 s, so 2-min tests work in Manual Entry (9 and 20 min already fitted the old window). Intervals.icu MMP extraction adds 120 s and 540 s samples (1200 s was already sampled), so the Data Workbench lists 2:00, 9:00 and 20:00 rows to toggle. Default auto-selection is still 3/12 min. Regression math is unchanged; `npm test` parity output is identical.
+- **Manual-entry range hint** (`LabWorkbench.tsx`) — shows the accepted 2:00–40:00 window and flags out-of-range durations inline instead of only erroring after "Calculate CP".
+
+- **CP test protocol selector** (`effortSelector.ts`, `LabWorkbench.tsx`) — "Test Protocol" dropdown in Intervals.icu mode: 3/12 (default), 3/20, 2/9, Stryd Auto CP (2/9/20), Palladino Auto CP (3/12/20). Drives which efforts are auto-selected; changing it re-picks from the fetched efforts. Persisted as `ppe_lab_protocol`. 3/12 selection is identical to before.
+- **±3 s duration leeway** (`labEngine.ts`, `effortSelector.ts`) — `DURATION_TOLERANCE_S = 3` widens the engine's accepted range to 117–2403 s and every protocol bracket by ±3 s, so hand-timed efforts like 1:58 or 12:02 aren't rejected.
+
+### Changed
+
+- **MMP cache key bumped** `mmp_v1_` → `mmp_v2_` so cached fetches without the new durations are not reused.
+
 ### Planned
 
 - **Critical Pace mode** — pace-based equivalent of the CP/W′ model for runners without a power meter. Uses the same OLS regression on Distance vs Duration (slope = Critical Speed in m/s, intercept = D′ in metres). Covers The Lab (pace effort input), Strategy Room (pace-based scenarios), and Pacing Plan (min/km splits). Toggle between Power mode and Pace mode throughout the app.

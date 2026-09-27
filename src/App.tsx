@@ -389,7 +389,7 @@ export default function App() {
   // ── Disconnect Intervals.icu ──────────────────────────────────────────────
   const handleDisconnectIntervals = useCallback(() => {
     const id = localStorage.getItem(LS_ID);
-    if (id) { clearCached(`mmp_v1_${id}`); clearCached(`races_v1_${id}`); }
+    if (id) { clearCached(`mmp_v2_${id}`); clearCached(`races_v1_${id}`); }
     localStorage.removeItem(LS_TOKEN);
     localStorage.removeItem(LS_ID);
     localStorage.removeItem(LS_NAME);

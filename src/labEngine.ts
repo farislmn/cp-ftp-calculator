@@ -73,8 +73,11 @@ const W_PRIME_BASELINES: Partial<Record<`${Sex}-${PowerMeter}`, number>> = {
 
 const MEDIUM_BAND = 0.15; // ±15% defines the "Medium" corridor
 const LOW_R2_THRESHOLD = 0.95;
-const MIN_DURATION_S = 180;
-const MAX_DURATION_S = 2400;
+/** Nominal effort-duration bounds accepted by the regression (2 min – 40 min). */
+export const MIN_DURATION_S = 120;
+export const MAX_DURATION_S = 2400;
+/** Leeway (±s) on duration bounds so hand-timed efforts (e.g. 1:58, 40:02) aren't rejected. */
+export const DURATION_TOLERANCE_S = 3;
 
 const LOW_CONFIDENCE_WARNING =
   'Confidence in this result is low due to inconsistent pacing. ' +
@@ -140,7 +143,7 @@ function rateWPrime(
  * of maximal efforts using the linear work-duration regression model.
  *
  * @throws {Error} if fewer than 2 efforts are provided or any duration is
- *   outside the inclusive interval [180 s, 2400 s].
+ *   outside the inclusive interval [120 s, 2400 s] ± DURATION_TOLERANCE_S.
  */
 export function calculateCP(
   efforts: Effort[],
@@ -156,12 +159,15 @@ export function calculateCP(
   }
 
   const invalidEfforts = efforts.filter(
-    (e) => e.durationSeconds < MIN_DURATION_S || e.durationSeconds > MAX_DURATION_S,
+    (e) =>
+      e.durationSeconds < MIN_DURATION_S - DURATION_TOLERANCE_S ||
+      e.durationSeconds > MAX_DURATION_S + DURATION_TOLERANCE_S,
   );
   if (invalidEfforts.length > 0) {
     const list = invalidEfforts.map((e) => `${e.durationSeconds}s`).join(', ');
     throw new Error(
-      `All durations must be between ${MIN_DURATION_S} and ${MAX_DURATION_S} seconds (inclusive). ` +
+      `All durations must be between ${MIN_DURATION_S} and ${MAX_DURATION_S} seconds ` +
+        `(±${DURATION_TOLERANCE_S} s, inclusive). ` +
         `Out-of-range: ${list}`,
     );
   }
