@@ -116,7 +116,7 @@ ATHLETE_ID=iXXXXXX API_KEY=your-key WEIGHT_KG=53 CP_WATTS=190 \
 | `ppe_lab_sel_{athleteId}` | LabWorkbench | selected effort keys per athlete |
 | `ppe_strategy_*` | StrategyRoom | distanceLabel, customKm, gainM, lossM, tempC, humidity, altitudeM |
 | `ppe_pacing_*` | PacingSplitPlan | splitEveryKm, splitType, deviationPct, raceDate |
-| `ppe_v1_mmp_v1_{athleteId}` | cache.ts | MMP efforts (1 h TTL) |
+| `ppe_v1_mmp_v2_{athleteId}` | cache.ts | MMP efforts (1 h TTL) |
 | `ppe_v1_races_v1_{athleteId}` | cache.ts | Race list (24 h TTL) |
 | `ppe_v1_orch_v1_{athleteId}_{distM}_{cpBucket}` | cache.ts | Orchestrator result (4 h TTL) |
 
@@ -259,11 +259,11 @@ factor = clamp(tAdj × hAdj × altAdj, 0.80, 1.20)
 
 **Low-confidence path:** R² < 0.95 adds a `warning` object. `suggestedCorrection` ranks efforts by *relative* residual to avoid scale bias. Always returns CP and W′ — the warning is additive.
 
-**Effort validation:** inclusive [180 s, 2400 s]. Throws (hard error) on out-of-range durations.
+**Effort validation:** inclusive [120 s, 2400 s] (`MIN_DURATION_S` / `MAX_DURATION_S`, exported — also used by the manual-entry row validation in `LabWorkbench`). Supports 2, 3, 9, 12 and 20 min test protocols. Throws (hard error) on out-of-range durations.
 
 ### intervalsClient.ts
 
-`fetchMaxEfforts(athleteId, apiKey, daysBack?)` — fetches the 20 most recent power-run activities, computes MMP for 13 canonical durations (120–1800 s) via O(n) sliding window. Returns `MaxEffort[]`.
+`fetchMaxEfforts(athleteId, apiKey, daysBack?)` — fetches the 20 most recent power-run activities, computes MMP for 10 canonical durations (`CP_SAMPLE_DURATIONS`: 120, 180, 300, 540, 600, 720, 900, 1200, 1800, 2400 s — covers the 2/3/9/12/20 min protocols) via O(n) sliding window. Cache key `mmp_v2_{athleteId}` (bumped from v1 when 120 s / 540 s were added). Returns `MaxEffort[]`.
 
 `buildAuthHeader(apiKey)` — returns `'Bearer {token}'` if `apiKey` starts with `'Bearer '`, otherwise `'Basic ' + btoa('API_KEY:' + apiKey)`. Used everywhere auth is sent to Intervals.icu.
 
@@ -279,7 +279,8 @@ factor = clamp(tAdj × hAdj × altAdj, 0.80, 1.20)
 
 - **Point 1:** best 180 s match within 180–300 s. Sort: `|dur − 180|` asc → date desc → power desc.
 - **Point 2:** best 720 s match within 720–900 s. Same logic.
-- **Fallback:** absolute shortest + longest if a bracket is empty.
+- **Fallback:** absolute shortest + longest if a bracket is empty (shortest can now be the 2-min / 120 s sample).
+- 2-min, 9-min and 20-min efforts are fetched and shown in the workbench table but are **not** auto-selected — the default stays 3/12 for parity; users toggle them in manually.
 
 `effortKey(e)` — stable `${durationSeconds}-${activityId}` used as React key and selection state.
 

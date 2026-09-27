@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { calculateCP } from '../labEngine.js';
+import { calculateCP, MIN_DURATION_S, MAX_DURATION_S } from '../labEngine.js';
 import type { Sex, PowerMeter, CPResult, EnvironmentConditions } from '../labEngine.js';
 import { fetchMaxEfforts } from '../intervalsClient.js';
 import type { MaxEffort } from '../intervalsClient.js';
@@ -441,7 +441,7 @@ export function LabWorkbench({
   useEffect(() => {
     const id = athleteId.trim();
     if (!id || hasData) return;
-    const cached = getCached<{ efforts: MaxEffort[] }>(`mmp_v1_${id}`);
+    const cached = getCached<{ efforts: MaxEffort[] }>(`mmp_v2_${id}`);
     if (!cached) return;
 
     setAllEfforts(cached.efforts);
@@ -526,7 +526,7 @@ export function LabWorkbench({
                 <button className="btn-ghost btn-sm" onClick={() => {
                   const id = athleteId.trim();
                   if (id) {
-                    clearCached(`mmp_v1_${id}`);
+                    clearCached(`mmp_v2_${id}`);
                     try { localStorage.removeItem(lsSelKeys(id)); } catch {}
                   }
                   setApiKey(''); setAthleteId(''); setAthleteName('');
@@ -648,11 +648,14 @@ export function LabWorkbench({
               <span className="manual-col-label">Duration (mm:ss)</span>
               <span className="manual-col-label">Power (W)</span>
             </div>
+            <p className="manual-env-hint">
+              Efforts between {fmtDuration(MIN_DURATION_S)} and {fmtDuration(MAX_DURATION_S)} — e.g. 2, 3, 9, 12 or 20 min tests.
+            </p>
 
             {manualPoints.map((pt, i) => {
               const parsedDur = parseManualDuration(pt.durationInput);
               const parsedPwr = Number(pt.powerInput);
-              const valid = parsedDur != null && parsedDur > 0 && parsedPwr > 0;
+              const valid = parsedDur != null && parsedDur >= MIN_DURATION_S && parsedDur <= MAX_DURATION_S && parsedPwr > 0;
               return (
                 <div key={pt.id} className="manual-row">
                   <input

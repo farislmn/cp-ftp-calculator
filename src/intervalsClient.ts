@@ -15,11 +15,12 @@ export function buildAuthHeader(apiKey: string): string {
 
 /**
  * Standard durations we compute MMP for (seconds).
- * Matches the 8 durations shown in the Lab workbench effort table.
- * 2400 s (40 min) is the upper bound accepted by the CP regression engine.
+ * Matches the 10 durations shown in the Lab workbench effort table and covers
+ * the common CP test protocols: 2, 3, 9, 12 and 20 min.
+ * 120 s (2 min) and 2400 s (40 min) are the bounds accepted by the CP regression engine.
  */
 const CP_SAMPLE_DURATIONS = [
-  180, 300, 600, 720, 900, 1200, 1800, 2400,
+  120, 180, 300, 540, 600, 720, 900, 1200, 1800, 2400,
 ] as const;
 
 /**
@@ -96,7 +97,7 @@ function computeMMP(watts: number[], durationSeconds: number): number | null {
 
 /**
  * Fetches running max efforts from Intervals.icu and maps them to the
- * Lab Engine schema, covering the CP-valid window of 120–1800 seconds.
+ * Lab Engine schema, covering the CP-valid window of 120–2400 seconds.
  *
  * Strategy:
  * 1. Fetch the activity list and filter for power-running activities.
@@ -122,7 +123,7 @@ export async function fetchMaxEfforts(
   const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
 
   // ── Cache check ───────────────────────────────────────────────────────────
-  const cacheKey = `mmp_v1_${athleteId}`;
+  const cacheKey = `mmp_v2_${athleteId}`;
   if (typeof window !== 'undefined') {
     const cached = getCached<FetchMaxEffortsResult>(cacheKey);
     if (cached) return cached;

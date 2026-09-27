@@ -73,8 +73,9 @@ const W_PRIME_BASELINES: Partial<Record<`${Sex}-${PowerMeter}`, number>> = {
 
 const MEDIUM_BAND = 0.15; // ±15% defines the "Medium" corridor
 const LOW_R2_THRESHOLD = 0.95;
-const MIN_DURATION_S = 180;
-const MAX_DURATION_S = 2400;
+/** Inclusive effort-duration bounds accepted by the regression (2 min – 40 min). */
+export const MIN_DURATION_S = 120;
+export const MAX_DURATION_S = 2400;
 
 const LOW_CONFIDENCE_WARNING =
   'Confidence in this result is low due to inconsistent pacing. ' +
@@ -140,7 +141,7 @@ function rateWPrime(
  * of maximal efforts using the linear work-duration regression model.
  *
  * @throws {Error} if fewer than 2 efforts are provided or any duration is
- *   outside the inclusive interval [180 s, 2400 s].
+ *   outside the inclusive interval [120 s, 2400 s].
  */
 export function calculateCP(
   efforts: Effort[],
