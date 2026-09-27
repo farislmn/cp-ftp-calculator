@@ -1,12 +1,44 @@
 import type { MaxEffort } from './intervalsClient.js';
+import { DURATION_TOLERANCE_S } from './labEngine.js';
 
-// ─── Target durations & bracket bounds ───────────────────────────────────────
-// The default CP protocol uses exactly 2 points:
-//   Point 1 — the classic 3-min (180 s) effort, searched within 180–300 s
-//   Point 2 — the classic 12-min (720 s) effort, searched within 720–900 s
+// ─── Test protocols ───────────────────────────────────────────────────────────
+// Each protocol auto-selects one effort per bracket: the best match for `target`
+// within the inclusive [min, max] window. 3/12 is the default (and the original
+// Goldilocks protocol — its brackets must stay 180–300 s / 720–900 s for parity).
+// Every bracket is widened by ±DURATION_TOLERANCE_S so near-miss durations
+// (e.g. 178 s, 543 s) still qualify.
 
-const SHORT_TARGET  = 180;  const SHORT_MIN  = 180;  const SHORT_MAX  = 300;
-const MEDIUM_TARGET = 720;  const MEDIUM_MIN = 720;  const MEDIUM_MAX = 900;
+export type CPProtocolId = '3-12' | '3-20' | '2-9' | 'stryd' | 'palladino';
+
+interface Bracket { target: number; min: number; max: number }
+
+export interface CPProtocol {
+  id: CPProtocolId;
+  label: string;
+  /** Human-readable list of the target durations, e.g. "3- and 12-min". */
+  durationsText: string;
+  brackets: Bracket[];
+}
+
+const B2  : Bracket = { target:  120, min:  120, max:  180 };
+const B3  : Bracket = { target:  180, min:  180, max:  300 };
+const B9  : Bracket = { target:  540, min:  540, max:  600 };
+const B12 : Bracket = { target:  720, min:  720, max:  900 };
+const B20 : Bracket = { target: 1200, min: 1200, max: 1500 };
+
+export const CP_PROTOCOLS: CPProtocol[] = [
+  { id: '3-12',      label: '3/12',                        durationsText: '3- and 12-min',      brackets: [B3, B12] },
+  { id: '3-20',      label: '3/20',                        durationsText: '3- and 20-min',      brackets: [B3, B20] },
+  { id: '2-9',       label: '2/9',                         durationsText: '2- and 9-min',       brackets: [B2, B9] },
+  { id: 'stryd',     label: 'Stryd Auto CP (2/9/20)',      durationsText: '2-, 9- and 20-min',  brackets: [B2, B9, B20] },
+  { id: 'palladino', label: 'Palladino Auto CP (3/12/20)', durationsText: '3-, 12- and 20-min', brackets: [B3, B12, B20] },
+];
+
+export const DEFAULT_CP_PROTOCOL: CPProtocolId = '3-12';
+
+/** Returns the protocol for `id`, falling back to the default for unknown ids. */
+export const getCPProtocol = (id: string | null | undefined): CPProtocol =>
+  CP_PROTOCOLS.find((p) => p.id === id) ?? CP_PROTOCOLS[0]!;
 
 // ─── Public helpers ───────────────────────────────────────────────────────────
 
@@ -33,43 +65,47 @@ function byTargetDurationThenPower(target: number) {
   };
 }
 
+const fmtMin = (s: number) => `${s / 60}`;
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
- * Selects exactly 2 efforts for the default "blackbox" CP calculation, targeting
- * the classic 3-min / 12-min testing protocol.
+ * Selects one effort per bracket of the chosen test protocol (default 3/12).
  *
- * Selection:
- *   Point 1 — best match for 180 s within the 180–300 s bracket
- *             (exact 180 s preferred; ties broken by recency then power)
- *   Point 2 — best match for 720 s within the 720–900 s bracket
- *             (exact 720 s preferred; ties broken by recency then power)
+ * Selection (per bracket):
+ *   best match for the target duration within the bracket window
+ *   (exact target preferred; ties broken by power then recency)
  *
- * Fallback (either bracket empty):
- *   Uses the absolute shortest and absolute longest efforts in the full history
- *   to guarantee the widest possible duration spread for the 2-point regression.
+ * Fallback (any bracket empty):
+ *   An empty first bracket is replaced by the absolute shortest effort and an
+ *   empty last bracket by the absolute longest, to keep the widest possible
+ *   duration spread for the regression. An empty middle bracket is dropped.
  *   Logs a console warning identifying which bracket(s) were missing.
  */
-export function autoSelectGoldilocksEfforts(allEfforts: MaxEffort[]): MaxEffort[] {
-  const shortBracket  = allEfforts.filter(
-    (e) => e.durationSeconds >= SHORT_MIN  && e.durationSeconds <= SHORT_MAX,
-  );
-  const mediumBracket = allEfforts.filter(
-    (e) => e.durationSeconds >= MEDIUM_MIN && e.durationSeconds <= MEDIUM_MAX,
+export function autoSelectGoldilocksEfforts(
+  allEfforts: MaxEffort[],
+  protocolId: CPProtocolId = DEFAULT_CP_PROTOCOL,
+): MaxEffort[] {
+  const { brackets } = getCPProtocol(protocolId);
+
+  const picks = brackets.map((b) =>
+    allEfforts
+      .filter((e) =>
+        e.durationSeconds >= b.min - DURATION_TOLERANCE_S &&
+        e.durationSeconds <= b.max + DURATION_TOLERANCE_S,
+      )
+      .sort(byTargetDurationThenPower(b.target))[0],
   );
 
-  const shortPick  = [...shortBracket].sort(byTargetDurationThenPower(SHORT_TARGET))[0];
-  const mediumPick = [...mediumBracket].sort(byTargetDurationThenPower(MEDIUM_TARGET))[0];
-
-  // Happy path — both brackets have data
-  if (shortPick && mediumPick) {
-    return [shortPick, mediumPick];
+  // Happy path — every bracket has data
+  if (picks.every(Boolean)) {
+    return picks as MaxEffort[];
   }
 
-  // Fallback — one or both brackets are empty
-  const missing: string[] = [];
-  if (!shortPick)  missing.push('short (3–5 min, target 180 s)');
-  if (!mediumPick) missing.push('medium (12–15 min, target 720 s)');
+  // Fallback — one or more brackets are empty
+  const missing = brackets
+    .filter((_, i) => !picks[i])
+    .map((b) => `${fmtMin(b.min)}–${fmtMin(b.max)} min (target ${b.target} s)`);
   console.warn(
     `[autoSelectGoldilocksEfforts] No data in bracket(s): ${missing.join(', ')}. ` +
     'Falling back to absolute shortest + longest efforts for maximum regression spread.',
@@ -86,8 +122,15 @@ export function autoSelectGoldilocksEfforts(allEfforts: MaxEffort[]): MaxEffort[
   }
 
   // Substitute the bracket pick where available, fallback otherwise
-  return [
-    shortPick  ?? shortest,
-    mediumPick ?? longest,
-  ];
+  const last = brackets.length - 1;
+  const result: MaxEffort[] = [];
+  const seen = new Set<string>();
+  picks.forEach((p, i) => {
+    const e = p ?? (i === 0 ? shortest : i === last ? longest : undefined);
+    if (e && !seen.has(effortKey(e))) {
+      seen.add(effortKey(e));
+      result.push(e);
+    }
+  });
+  return result;
 }

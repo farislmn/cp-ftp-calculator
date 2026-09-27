@@ -112,7 +112,7 @@ ATHLETE_ID=iXXXXXX API_KEY=your-key WEIGHT_KG=53 CP_WATTS=190 \
 
 | Prefix | Component | What's stored |
 |---|---|---|
-| `ppe_lab_*` | LabWorkbench | weight, sex, powerMeter, lastSaved CP snapshot |
+| `ppe_lab_*` | LabWorkbench | weight, sex, powerMeter, lastSaved CP snapshot, protocol (`ppe_lab_protocol`) |
 | `ppe_lab_sel_{athleteId}` | LabWorkbench | selected effort keys per athlete |
 | `ppe_strategy_*` | StrategyRoom | distanceLabel, customKm, gainM, lossM, tempC, humidity, altitudeM |
 | `ppe_pacing_*` | PacingSplitPlan | splitEveryKm, splitType, deviationPct, raceDate |
@@ -259,7 +259,7 @@ factor = clamp(tAdj × hAdj × altAdj, 0.80, 1.20)
 
 **Low-confidence path:** R² < 0.95 adds a `warning` object. `suggestedCorrection` ranks efforts by *relative* residual to avoid scale bias. Always returns CP and W′ — the warning is additive.
 
-**Effort validation:** inclusive [120 s, 2400 s] (`MIN_DURATION_S` / `MAX_DURATION_S`, exported — also used by the manual-entry row validation in `LabWorkbench`). Supports 2, 3, 9, 12 and 20 min test protocols. Throws (hard error) on out-of-range durations.
+**Effort validation:** inclusive [120 s, 2400 s] ± `DURATION_TOLERANCE_S` (3 s) — i.e. 117–2403 s. `MIN_DURATION_S` / `MAX_DURATION_S` / `DURATION_TOLERANCE_S` are exported and also used by the manual-entry row validation in `LabWorkbench`. Supports 2, 3, 9, 12 and 20 min test protocols. Throws (hard error) on out-of-range durations.
 
 ### intervalsClient.ts
 
@@ -275,12 +275,20 @@ factor = clamp(tAdj × hAdj × altAdj, 0.80, 1.20)
 
 ### effortSelector.ts
 
-`autoSelectGoldilocksEfforts(allEfforts)` — returns exactly 2 efforts for the 3-min / 12-min CP protocol.
+`autoSelectGoldilocksEfforts(allEfforts, protocolId = '3-12')` — returns one effort per bracket of the chosen test protocol (`CP_PROTOCOLS`, `getCPProtocol(id)`).
 
-- **Point 1:** best 180 s match within 180–300 s. Sort: `|dur − 180|` asc → date desc → power desc.
-- **Point 2:** best 720 s match within 720–900 s. Same logic.
-- **Fallback:** absolute shortest + longest if a bracket is empty (shortest can now be the 2-min / 120 s sample).
-- 2-min, 9-min and 20-min efforts are fetched and shown in the workbench table but are **not** auto-selected — the default stays 3/12 for parity; users toggle them in manually.
+| id | Label | Brackets (target: window) |
+|---|---|---|
+| `3-12` *(default)* | 3/12 | 180: 180–300 · 720: 720–900 |
+| `3-20` | 3/20 | 180: 180–300 · 1200: 1200–1500 |
+| `2-9` | 2/9 | 120: 120–180 · 540: 540–600 |
+| `stryd` | Stryd Auto CP (2/9/20) | 120 · 540 · 1200 |
+| `palladino` | Palladino Auto CP (3/12/20) | 180 · 720 · 1200 |
+
+- Every window is widened by ±`DURATION_TOLERANCE_S` (3 s).
+- **Per bracket:** sort `|dur − target|` asc → power desc → date desc.
+- **Fallback:** empty first bracket → absolute shortest effort; empty last bracket → absolute longest; empty middle bracket → dropped. Results are de-duplicated.
+- `LabWorkbench` has a "Test Protocol" dropdown (Intervals.icu mode only), persisted as `ppe_lab_protocol`; changing it re-runs the auto-pick on the fetched efforts. CLI scripts (`autoCp.ts`, `testOrchestrator.ts`) use the default.
 
 `effortKey(e)` — stable `${durationSeconds}-${activityId}` used as React key and selection state.
 
