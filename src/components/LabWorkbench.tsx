@@ -278,7 +278,8 @@ export function LabWorkbench({
   const [apiKey,         setApiKey]         = useState(initialApiKey ?? '');
   const [athleteName,    setAthleteName]    = useState(initialAthleteName ?? '');
   const [showManualEntry, setShowManualEntry] = useState(false);
-  const [weightKg,   setWeightKg]   = useState<number>(() => Number(lsGet(LS_WEIGHT, '70')));
+  const [weightInput, setWeightInput] = useState<string>(() => lsGet(LS_WEIGHT, '70'));
+  const weightKg = Number(weightInput) || 0;
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [sex,        setSex]        = useState<Sex>(() => lsGet(LS_SEX, 'Male') as Sex);
   const [powerMeter, setPowerMeter] = useState<PowerMeter>(() => lsGet(LS_METER, 'Stryd non-Wind') as PowerMeter);
@@ -306,12 +307,34 @@ export function LabWorkbench({
     } catch { return DEFAULT_MANUAL_POINTS; }
   });
 
-  const [manualTestEnv, setManualTestEnv] = useState<EnvironmentConditions>(() => {
+  const [manualTestEnvInput, setManualTestEnvInput] = useState<{
+    temperatureC: string;
+    altitudeM: string;
+    humidityPercent: string;
+  }>(() => {
     try {
       const raw = localStorage.getItem(LS_MANUAL_ENV);
-      return raw ? (JSON.parse(raw) as EnvironmentConditions) : DEFAULT_MANUAL_ENV;
-    } catch { return DEFAULT_MANUAL_ENV; }
+      if (raw) {
+        const parsed = JSON.parse(raw) as EnvironmentConditions;
+        return {
+          temperatureC: String(parsed.temperatureC ?? DEFAULT_MANUAL_ENV.temperatureC),
+          altitudeM: String(parsed.altitudeM ?? DEFAULT_MANUAL_ENV.altitudeM),
+          humidityPercent: String(parsed.humidityPercent ?? DEFAULT_MANUAL_ENV.humidityPercent ?? 50),
+        };
+      }
+    } catch {}
+    return {
+      temperatureC: String(DEFAULT_MANUAL_ENV.temperatureC),
+      altitudeM: String(DEFAULT_MANUAL_ENV.altitudeM),
+      humidityPercent: String(DEFAULT_MANUAL_ENV.humidityPercent ?? 50),
+    };
   });
+
+  const manualTestEnv = useMemo<EnvironmentConditions>(() => ({
+    temperatureC: Number(manualTestEnvInput.temperatureC) || 0,
+    altitudeM: Number(manualTestEnvInput.altitudeM) || 0,
+    humidityPercent: Number(manualTestEnvInput.humidityPercent) || 0,
+  }), [manualTestEnvInput]);
 
   // ── Intervals data state ──────────────────────────────────────────────────────
   const [loading,      setLoading]      = useState(false);
@@ -598,11 +621,12 @@ export function LabWorkbench({
             <span>Weight (kg)</span>
             <input
               type="number"
-              value={weightKg}
+              value={weightInput}
               min={30}
               max={150}
               step={0.1}
-              onChange={(e) => setWeightKg(Number(e.target.value))}
+              placeholder="70"
+              onChange={(e) => setWeightInput(e.target.value)}
             />
           </label>
 
@@ -728,29 +752,32 @@ export function LabWorkbench({
                   <span>Temperature (°C)</span>
                   <input
                     type="number"
-                    value={manualTestEnv.temperatureC}
+                    value={manualTestEnvInput.temperatureC}
                     step={0.5}
-                    onChange={(e) => setManualTestEnv(prev => ({ ...prev, temperatureC: Number(e.target.value) }))}
+                    placeholder="20"
+                    onChange={(e) => setManualTestEnvInput(prev => ({ ...prev, temperatureC: e.target.value }))}
                   />
                 </label>
                 <label className="field">
                   <span>Altitude (m)</span>
                   <input
                     type="number"
-                    value={manualTestEnv.altitudeM}
+                    value={manualTestEnvInput.altitudeM}
                     min={0}
                     step={10}
-                    onChange={(e) => setManualTestEnv(prev => ({ ...prev, altitudeM: Number(e.target.value) }))}
+                    placeholder="0"
+                    onChange={(e) => setManualTestEnvInput(prev => ({ ...prev, altitudeM: e.target.value }))}
                   />
                 </label>
                 <label className="field">
                   <span>Humidity (%)</span>
                   <input
                     type="number"
-                    value={manualTestEnv.humidityPercent}
+                    value={manualTestEnvInput.humidityPercent}
                     min={0}
                     max={100}
-                    onChange={(e) => setManualTestEnv(prev => ({ ...prev, humidityPercent: Number(e.target.value) }))}
+                    placeholder="50"
+                    onChange={(e) => setManualTestEnvInput(prev => ({ ...prev, humidityPercent: e.target.value }))}
                   />
                 </label>
               </div>

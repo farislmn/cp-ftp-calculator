@@ -202,14 +202,22 @@ export function StrategyRoom({
 }: StrategyRoomProps) {
 
   // ── User inputs ─────────────────────────────────────────────────────────────
-  const [distanceLabel,       setDistanceLabel]       = useState<DistanceLabel>(() => lsGet(LS.distLabel, 'Marathon') as DistanceLabel);
-  // stored in km; multiplied to meters for all physics
-  const [customDistanceKm,    setCustomDistanceKm]    = useState(() => Number(lsGet(LS.customKm, '42.195')));
-  const [elevationGainM,      setElevationGainM]      = useState(() => Number(lsGet(LS.gainM, '0')));
-  const [elevationLossM,      setElevationLossM]      = useState(() => Number(lsGet(LS.lossM, '0')));
-  const [forecastTempC,       setForecastTempC]       = useState(() => Number(lsGet(LS.tempC, '20')));
-  const [forecastHumidityPct, setForecastHumidityPct] = useState(() => Number(lsGet(LS.humidity, '50')));
-  const [forecastAltitudeM,   setForecastAltitudeM]   = useState(() => Number(lsGet(LS.altitudeM, '0')));
+  const [distanceLabel,         setDistanceLabel]         = useState<DistanceLabel>(() => lsGet(LS.distLabel, 'Marathon') as DistanceLabel);
+  // stored as strings so clearing an input leaves it blank instead of sticking on "0"
+  const [customDistanceInput,   setCustomDistanceInput]   = useState(() => lsGet(LS.customKm, '42.195'));
+  const [elevationGainInput,    setElevationGainInput]    = useState(() => lsGet(LS.gainM, '0'));
+  const [elevationLossInput,    setElevationLossInput]    = useState(() => lsGet(LS.lossM, '0'));
+  const [forecastTempInput,     setForecastTempInput]     = useState(() => lsGet(LS.tempC, '20'));
+  const [forecastHumidityInput, setForecastHumidityInput] = useState(() => lsGet(LS.humidity, '50'));
+  const [forecastAltitudeInput, setForecastAltitudeInput] = useState(() => lsGet(LS.altitudeM, '0'));
+
+  const customDistanceKm    = Number(customDistanceInput)   || 0;
+  const elevationGainM      = Number(elevationGainInput)    || 0;
+  const elevationLossM      = Number(elevationLossInput)    || 0;
+  const forecastTempC       = Number(forecastTempInput)     || 0;
+  const forecastHumidityPct = Number(forecastHumidityInput) || 0;
+  const forecastAltitudeM   = Number(forecastAltitudeInput) || 0;
+
   const dElevGain  = useDebounced(elevationGainM,      300);
   const dElevLoss  = useDebounced(elevationLossM,      300);
   const dTempC     = useDebounced(forecastTempC,       300);
@@ -336,10 +344,10 @@ export function StrategyRoom({
     const applyData = (data: StrategyDataResult) => {
       setStrategyData(data);
       if (!userSetWeather.current) {
-        setForecastTempC(Math.round(data.environment.temperatureC));
-        setForecastAltitudeM(Math.round(data.environment.altitudeM));
+        setForecastTempInput(String(Math.round(data.environment.temperatureC)));
+        setForecastAltitudeInput(String(Math.round(data.environment.altitudeM)));
         if (data.environment.humidityPercent != null) {
-          setForecastHumidityPct(Math.round(data.environment.humidityPercent));
+          setForecastHumidityInput(String(Math.round(data.environment.humidityPercent)));
         }
       }
     };
@@ -376,25 +384,25 @@ export function StrategyRoom({
   // user-set when the values were just restored from localStorage defaults.
   const skipFirstWeatherSave = useRef(true);
 
-  useEffect(() => { lsSet(LS.distLabel, distanceLabel); },           [distanceLabel]);
-  useEffect(() => { lsSet(LS.customKm,  String(customDistanceKm)); }, [customDistanceKm]);
-  useEffect(() => { lsSet(LS.gainM,     String(elevationGainM)); },   [elevationGainM]);
-  useEffect(() => { lsSet(LS.lossM,     String(elevationLossM)); },   [elevationLossM]);
+  useEffect(() => { lsSet(LS.distLabel, distanceLabel); },        [distanceLabel]);
+  useEffect(() => { lsSet(LS.customKm,  customDistanceInput); },  [customDistanceInput]);
+  useEffect(() => { lsSet(LS.gainM,     elevationGainInput); },   [elevationGainInput]);
+  useEffect(() => { lsSet(LS.lossM,     elevationLossInput); },   [elevationLossInput]);
   useEffect(() => {
     if (skipFirstWeatherSave.current) return;
-    lsSet(LS.tempC, String(forecastTempC));
+    lsSet(LS.tempC, forecastTempInput);
     userSetWeather.current = true;
-  }, [forecastTempC]);
+  }, [forecastTempInput]);
   useEffect(() => {
     if (skipFirstWeatherSave.current) return;
-    lsSet(LS.humidity, String(forecastHumidityPct));
+    lsSet(LS.humidity, forecastHumidityInput);
     userSetWeather.current = true;
-  }, [forecastHumidityPct]);
+  }, [forecastHumidityInput]);
   useEffect(() => {
     if (skipFirstWeatherSave.current) { skipFirstWeatherSave.current = false; return; }
-    lsSet(LS.altitudeM, String(forecastAltitudeM));
+    lsSet(LS.altitudeM, forecastAltitudeInput);
     userSetWeather.current = true;
-  }, [forecastAltitudeM]);
+  }, [forecastAltitudeInput]);
 
   // ── Fetch race list on mount — fetchRecentRaces caches internally (24 h TTL) ─
   useEffect(() => {
@@ -445,10 +453,10 @@ export function StrategyRoom({
   // Only runs once per testEnvironment change, and only when strategyData is absent.
   useEffect(() => {
     if (!testEnvironment || strategyData || userSetWeather.current) return;
-    setForecastTempC(Math.round(testEnvironment.temperatureC));
-    setForecastAltitudeM(Math.round(testEnvironment.altitudeM));
+    setForecastTempInput(String(Math.round(testEnvironment.temperatureC)));
+    setForecastAltitudeInput(String(Math.round(testEnvironment.altitudeM)));
     if (testEnvironment.humidityPercent != null) {
-      setForecastHumidityPct(Math.round(testEnvironment.humidityPercent));
+      setForecastHumidityInput(String(Math.round(testEnvironment.humidityPercent)));
     }
   }, [testEnvironment, strategyData]);
 
@@ -599,10 +607,11 @@ export function StrategyRoom({
             <span>Elevation Gain (m)</span>
             <input
               type="number"
-              value={elevationGainM}
+              value={elevationGainInput}
               min={0}
               step={10}
-              onChange={(e) => setElevationGainM(Number(e.target.value))}
+              placeholder="0"
+              onChange={(e) => setElevationGainInput(e.target.value)}
             />
           </label>
 
@@ -610,10 +619,11 @@ export function StrategyRoom({
             <span>Elevation Loss (m)</span>
             <input
               type="number"
-              value={elevationLossM}
+              value={elevationLossInput}
               min={0}
               step={10}
-              onChange={(e) => setElevationLossM(Number(e.target.value))}
+              placeholder="0"
+              onChange={(e) => setElevationLossInput(e.target.value)}
             />
           </label>
 
@@ -622,11 +632,12 @@ export function StrategyRoom({
               <span>Custom Distance (km)</span>
               <input
                 type="number"
-                value={customDistanceKm}
+                value={customDistanceInput}
                 min={0.1}
                 max={200}
                 step={0.1}
-                onChange={(e) => setCustomDistanceKm(Number(e.target.value))}
+                placeholder="e.g. 42.195"
+                onChange={(e) => setCustomDistanceInput(e.target.value)}
               />
             </label>
           )}
@@ -635,9 +646,10 @@ export function StrategyRoom({
             <span>Race Temperature (°C)</span>
             <input
               type="number"
-              value={forecastTempC}
+              value={forecastTempInput}
               step={1}
-              onChange={(e) => setForecastTempC(Number(e.target.value))}
+              placeholder="20"
+              onChange={(e) => setForecastTempInput(e.target.value)}
             />
           </label>
 
@@ -645,11 +657,12 @@ export function StrategyRoom({
             <span>Race Humidity (%)</span>
             <input
               type="number"
-              value={forecastHumidityPct}
+              value={forecastHumidityInput}
               min={0}
               max={100}
               step={5}
-              onChange={(e) => setForecastHumidityPct(Number(e.target.value))}
+              placeholder="50"
+              onChange={(e) => setForecastHumidityInput(e.target.value)}
             />
           </label>
 
@@ -657,10 +670,11 @@ export function StrategyRoom({
             <span>Race Altitude (m)</span>
             <input
               type="number"
-              value={forecastAltitudeM}
+              value={forecastAltitudeInput}
               min={0}
               step={50}
-              onChange={(e) => setForecastAltitudeM(Number(e.target.value))}
+              placeholder="0"
+              onChange={(e) => setForecastAltitudeInput(e.target.value)}
             />
           </label>
 

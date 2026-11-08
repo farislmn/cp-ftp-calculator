@@ -270,20 +270,23 @@ function lsGet(key: string, fallback: string): string {
 export function PacingSplitPlan({
   scenario, scenarioLabel, distanceMeters, weightKg, cpWatts = 0, athleteId = '', apiKey = '',
 }: PacingSplitPlanProps) {
-  const [splitEveryKm,  setSplitEveryKm]  = useState(() => Number(lsGet(LS.splitKm, '5')) || 5);
-  const [splitType,     setSplitType]     = useState<SplitType>(() => {
+  const [splitEveryInput, setSplitEveryInput] = useState(() => lsGet(LS.splitKm, '5'));
+  const [splitType,       setSplitType]       = useState<SplitType>(() => {
     const v = lsGet(LS.splitType, 'Negative Split');
     return (SPLIT_TYPES as string[]).includes(v) ? v as SplitType : 'Negative Split';
   });
-  const [deviationPct,  setDeviationPct]  = useState(() => Number(lsGet(LS.devPct, '2')) || 2);
-  const [raceDate,      setRaceDate]      = useState(() => lsGet(LS.raceDate, ''));
-  const [pushStatus,    setPushStatus]    = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [pushError,     setPushError]     = useState<string | null>(null);
+  const [deviationInput,  setDeviationInput]  = useState(() => lsGet(LS.devPct, '2'));
+  const [raceDate,        setRaceDate]        = useState(() => lsGet(LS.raceDate, ''));
+  const [pushStatus,      setPushStatus]      = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [pushError,       setPushError]       = useState<string | null>(null);
 
-  useEffect(() => { localStorage.setItem(LS.splitKm,   String(splitEveryKm)); }, [splitEveryKm]);
-  useEffect(() => { localStorage.setItem(LS.splitType, splitType); },            [splitType]);
-  useEffect(() => { localStorage.setItem(LS.devPct,    String(deviationPct)); }, [deviationPct]);
-  useEffect(() => { localStorage.setItem(LS.raceDate,  raceDate); },             [raceDate]);
+  const splitEveryKm = Number(splitEveryInput) || 0;
+  const deviationPct = Number(deviationInput)  || 0;
+
+  useEffect(() => { localStorage.setItem(LS.splitKm,   splitEveryInput); }, [splitEveryInput]);
+  useEffect(() => { localStorage.setItem(LS.splitType, splitType); },       [splitType]);
+  useEffect(() => { localStorage.setItem(LS.devPct,    deviationInput); },  [deviationInput]);
+  useEffect(() => { localStorage.setItem(LS.raceDate,  raceDate); },        [raceDate]);
 
   // 0 or empty → one interval for the whole distance
   const splitEveryM = useMemo((): number =>
@@ -346,10 +349,11 @@ export function PacingSplitPlan({
             <span>Split every (km, 0 = whole)</span>
             <input
               type="number"
-              value={splitEveryKm}
+              value={splitEveryInput}
               min={0}
               step={1}
-              onChange={(e) => setSplitEveryKm(Number(e.target.value))}
+              placeholder="5"
+              onChange={(e) => setSplitEveryInput(e.target.value)}
             />
           </label>
           <label className="pacing-control-field">
@@ -364,11 +368,12 @@ export function PacingSplitPlan({
             <span>Deviation %</span>
             <input
               type="number"
-              value={deviationPct}
+              value={deviationInput}
               min={0}
               max={10}
               step={0.5}
-              onChange={(e) => setDeviationPct(Number(e.target.value))}
+              placeholder="2"
+              onChange={(e) => setDeviationInput(e.target.value)}
             />
           </label>
         </div>
