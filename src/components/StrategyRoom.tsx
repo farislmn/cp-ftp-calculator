@@ -253,8 +253,10 @@ export function StrategyRoom({
   }, [distanceLabel, customDistanceKm]);
 
   // ── Riegel calibration table ────────────────────────────────────────────────
-  // Classic two-race Riegel: T₂ = T₁ × (D₂/D₁)^(1/(1+r))
-  // Shows predicted finish time at target distance across 10 Riegel exponents.
+  // Classic two-race Riegel: T₂ = T₁ × (D₂/D₁)^(1/(1+r)) when D₁ ≠ D₂.
+  // When D₁ ≈ D₂ (same distance), two-race Riegel is flat (D₂/D₁ ≈ 1), so we
+  // display the engine's CP-anchored finish time at target distance for each r
+  // while highlighting the Riegel band from riegelLookup.ts.
   const RIEGEL_EXPONENTS = [-0.05, -0.06, -0.07, -0.08, -0.09, -0.10, -0.11, -0.12, -0.13, -0.14];
   const RIEGEL_TYPICAL_MIN = -0.10;
   const RIEGEL_TYPICAL_MAX = -0.07;
@@ -264,13 +266,63 @@ export function StrategyRoom({
     const t1 = parseRaceTime(knownRaceTimeStr);
     const d2 = targetDistanceM / 1000;
     if (!d1 || !t1 || d1 <= 0 || t1 <= 0) return null;
-    if (Math.abs(d1 - d2) < 0.2) return null; // distances too similar to calibrate
-    return RIEGEL_EXPONENTS.map((r) => ({
-      r,
-      t2: t1 * Math.pow(d2 / d1, 1 / (1 + r)),
-      typical: r >= RIEGEL_TYPICAL_MIN && r <= RIEGEL_TYPICAL_MAX,
-    }));
-  }, [knownRaceDistKm, knownRaceTimeStr, targetDistanceM]);
+
+    const isSameDistance = Math.abs(d1 - d2) < 0.2;
+    const targetKey = distLabelToKey(distanceLabel)
+      ?? (distanceLabel === 'Custom' ? distMetersToKey(targetDistanceM) : null);
+    const knownKey = distMetersToKey(d1 * 1000);
+    const lookedUpR = (targetKey && knownKey)
+      ? getRiegelExponent(targetKey, knownKey, t1)
+      : null;
+
+    const baseRE = strategyData ? pickBaseRE(strategyData.re) : DEFAULT_RE;
+    const { cvi: targetCVI } = calculateCVI(targetDistanceM, dElevGain, dElevLoss);
+    const effectiveEnv = testEnvironment ?? strategyData?.environment ?? null;
+    const envFactor = effectiveEnv
+      ? calcEnvAdjustment(
+          {
+            altitudeM:       effectiveEnv.altitudeM,
+            temperatureC:    effectiveEnv.temperatureC,
+            humidityPercent: effectiveEnv.humidityPercent ?? dHumidity,
+          },
+          {
+            altitudeM:       dAltitudeM,
+            temperatureC:    dTempC,
+            humidityPercent: dHumidity,
+          },
+        ).factor
+      : 1.0;
+
+    const rows = RIEGEL_EXPONENTS.map((r) => {
+      const t2 = isSameDistance
+        ? calculateRaceScenario(
+            {
+              cpWatts,
+              wPrimeJoules,
+              weightKg,
+              baseRE,
+              trainingTerrainCVI: strategyData?.trainingTerrainCVI ?? 0,
+              baseRiegel: r,
+            },
+            { distanceMeters: targetDistanceM, cvi: targetCVI },
+            undefined,
+            envFactor,
+          ).scenarios[4]!.estimatedTimeSeconds
+        : t1 * Math.pow(d2 / d1, 1 / (1 + r));
+
+      return {
+        r,
+        t2,
+        typical: r >= RIEGEL_TYPICAL_MIN && r <= RIEGEL_TYPICAL_MAX,
+      };
+    });
+
+    return { rows, isSameDistance, lookedUpR };
+  }, [
+    knownRaceDistKm, knownRaceTimeStr, targetDistanceM, distanceLabel,
+    strategyData, testEnvironment, dElevGain, dElevLoss,
+    dAltitudeM, dTempC, dHumidity, cpWatts, wPrimeJoules, weightKg,
+  ]);
 
   // ── Sync orchestrator data — cached per athlete + distance (4 h TTL) ─────────
   useEffect(() => {
@@ -380,6 +432,8 @@ export function StrategyRoom({
     if (riegel === null) return;
 
     setManualRiegel(riegel);
+    setKnownRaceDistKm((rec.distanceMeters / 1000).toFixed(3));
+    setKnownRaceTimeStr(fmtRaceTime(rec.movingTimeSeconds));
     setAutoRiegelSource({
       date: rec.date,
       distKm: rec.distanceMeters / 1000,
@@ -487,6 +541,18 @@ export function StrategyRoom({
   const handleSelectRaceForCalib = (race: RaceRecord) => {
     setKnownRaceDistKm((race.distanceMeters / 1000).toFixed(3));
     setKnownRaceTimeStr(fmtRaceTime(race.movingTimeSeconds));
+
+    const targetKey = distLabelToKey(distanceLabel)
+      ?? (distanceLabel === 'Custom' ? distMetersToKey(targetDistanceM) : null);
+    const knownKey = distMetersToKey(race.distanceMeters);
+    const riegel = (targetKey && knownKey)
+      ? getRiegelExponent(targetKey, knownKey, race.movingTimeSeconds)
+      : null;
+    if (riegel !== null) {
+      userOverrodeRiegel.current = true;
+      setAutoRiegelSource(null);
+      setManualRiegel(riegel);
+    }
   };
 
   const handleSelectRiegelRow = (r: number, isSelected: boolean) => {
@@ -733,24 +799,42 @@ export function StrategyRoom({
             {/* ── Step 3: Riegel table ── */}
             {riegelTable ? (
               <>
+                {riegelTable.isSameDistance && (
+                  <p className="riegel-hint" style={{ marginBottom: 8, marginTop: 0 }}>
+                    Known race matches target distance — showing CP-anchored finish times per Riegel exponent.
+                  </p>
+                )}
                 <div className="table-wrapper">
                   <table className="effort-table">
                     <thead>
                       <tr>
                         <th>Riegel (r)</th>
-                        <th>Predicted time at {(targetDistanceM / 1000).toFixed(2)} km</th>
+                        <th>
+                          {riegelTable.isSameDistance
+                            ? `CP-predicted time at ${(targetDistanceM / 1000).toFixed(2)} km`
+                            : `Predicted time at ${(targetDistanceM / 1000).toFixed(2)} km`}
+                        </th>
                         <th>Notes</th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
                       {(() => {
-                        const sortedR       = [...RIEGEL_EXPONENTS].sort((a, b) => a - b);
-                        const midIdx        = Math.floor((sortedR.length - 1) / 2);
-                        const likelyR       = sortedR[midIdx]!;
-                        const aggressiveR   = sortedR[midIdx + 1]!; // +0.01 from Likely
-                        const conservativeR = sortedR[midIdx - 1]!; // -0.01 from Likely
-                        return riegelTable.map(({ r, t2 }) => {
+                        const sortedR = [...RIEGEL_EXPONENTS].sort((a, b) => a - b);
+                        const targetR = riegelTable.lookedUpR ?? -0.10;
+                        let likelyIdx = Math.floor((sortedR.length - 1) / 2);
+                        let minDiff   = Infinity;
+                        sortedR.forEach((val, idx) => {
+                          const diff = Math.abs(val - targetR);
+                          if (diff < minDiff) {
+                            minDiff   = diff;
+                            likelyIdx = idx;
+                          }
+                        });
+                        const likelyR       = sortedR[likelyIdx]!;
+                        const aggressiveR   = sortedR[likelyIdx + 1]; // +0.01 from Likely
+                        const conservativeR = sortedR[likelyIdx - 1]; // -0.01 from Likely
+                        return riegelTable.rows.map(({ r, t2 }) => {
                           const isExplicit = manualRiegel === r;
                           // When no Riegel is set, treat the Likely row as the default active row
                           const isChecked  = isExplicit || (manualRiegel === null && r === likelyR);
@@ -809,7 +893,7 @@ export function StrategyRoom({
             ) : (
               <p className="msg-muted">
                 {knownRaceDistKm && knownRaceTimeStr
-                  ? 'Known race and target distance are too similar to calibrate — use a different distance.'
+                  ? 'Enter a valid distance (> 0 km) and finish time in mm:ss or h:mm:ss format.'
                   : 'Select a race above or enter a distance and finish time to generate the table.'}
               </p>
             )}
